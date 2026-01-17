@@ -1,1 +1,5 @@
-target
+# Go binary
+ssh-server
+
+# SSH host keys (private key is secret!)
+.ssh/
