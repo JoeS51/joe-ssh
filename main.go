@@ -1,7 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"log"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -10,112 +12,471 @@ import (
 	"github.com/charmbracelet/wish/bubbletea"
 )
 
-// Styles
+// ============================================================================
+// ASCII Art & Content
+// ============================================================================
+
+var asciiLogo = `
+     ██╗ ██████╗ ███████╗
+     ██║██╔═══██╗██╔════╝
+     ██║██║   ██║█████╗  
+██   ██║██║   ██║██╔══╝  
+╚█████╔╝╚██████╔╝███████╗
+ ╚════╝  ╚═════╝ ╚══════╝`
+
+var aboutContent = `
+Hi! I'm Joe, a software developer passionate about building
+great user experiences and exploring new technologies.
+
+I love working on:
+  • Backend systems and APIs
+  • Terminal applications and CLI tools
+  • Cloud infrastructure and DevOps
+
+Currently exploring Go, Rust, and distributed systems.
+`
+
+var contactContent = `
+Feel free to reach out!
+
+  GitHub      github.com/joe
+  Email       joe@example.com
+  LinkedIn    linkedin.com/in/joe
+  Twitter     @joe
+`
+
+// ============================================================================
+// Data Types
+// ============================================================================
+
+type Project struct {
+	Name string
+	Desc string
+	Tech string
+	Link string
+}
+
+type Experience struct {
+	Role    string
+	Company string
+	Period  string
+	Desc    string
+}
+
+var projects = []Project{
+	{
+		Name: "SSH Portfolio",
+		Desc: "This very app! A terminal-based portfolio accessible via SSH.",
+		Tech: "Go, Bubble Tea, Wish",
+		Link: "github.com/joe/ssh-portfolio",
+	},
+	{
+		Name: "Task Manager CLI",
+		Desc: "A command-line task manager with local storage and sync.",
+		Tech: "Rust, SQLite",
+		Link: "github.com/joe/task-cli",
+	},
+	{
+		Name: "API Gateway",
+		Desc: "High-performance API gateway with rate limiting and caching.",
+		Tech: "Go, Redis, Docker",
+		Link: "github.com/joe/api-gateway",
+	},
+	{
+		Name: "Chat Application",
+		Desc: "Real-time chat with WebSocket support and E2E encryption.",
+		Tech: "TypeScript, Node.js, React",
+		Link: "github.com/joe/chat-app",
+	},
+}
+
+var experiences = []Experience{
+	{
+		Role:    "Senior Software Engineer",
+		Company: "Tech Corp",
+		Period:  "2023 - Present",
+		Desc:    "Leading backend development for core platform services.",
+	},
+	{
+		Role:    "Software Engineer",
+		Company: "Startup Inc",
+		Period:  "2021 - 2023",
+		Desc:    "Built microservices architecture and CI/CD pipelines.",
+	},
+	{
+		Role:    "Junior Developer",
+		Company: "Dev Agency",
+		Period:  "2019 - 2021",
+		Desc:    "Full-stack web development for various client projects.",
+	},
+}
+
+// ============================================================================
+// Page Types
+// ============================================================================
+
+type page int
+
+const (
+	menuPage page = iota
+	aboutPage
+	projectsPage
+	experiencePage
+	contactPage
+)
+
+var menuItems = []string{"About", "Projects", "Experience", "Contact"}
+
+// ============================================================================
+// Styles (Kanagawa Theme)
+// ============================================================================
+
 var (
-	titleStyle = lipgloss.NewStyle().
+	// Colors
+	oniViolet   = lipgloss.Color("#957FB8")
+	fujiWhite   = lipgloss.Color("#DCD7BA")
+	springGreen = lipgloss.Color("#98BB6C")
+	fujiGray    = lipgloss.Color("#727169")
+	waveBlue    = lipgloss.Color("#7E9CD8")
+	surimiOrange = lipgloss.Color("#FFA066")
+	autumnRed   = lipgloss.Color("#C34043")
+	carpYellow  = lipgloss.Color("#E6C384")
+
+	// Styles
+	logoStyle = lipgloss.NewStyle().
+			Foreground(oniViolet).
 			Bold(true).
-			Foreground(lipgloss.Color("#FF79C6")).
+			MarginBottom(1)
+
+	titleStyle = lipgloss.NewStyle().
+			Foreground(oniViolet).
+			Bold(true).
 			MarginBottom(1)
 
 	menuStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#8BE9FD"))
+			Foreground(fujiWhite)
 
 	selectedStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#50FA7B")).
+			Foreground(springGreen).
 			Bold(true)
 
 	helpStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#6272A4")).
+			Foreground(fujiGray).
 			MarginTop(1)
+
+	contentStyle = lipgloss.NewStyle().
+			Foreground(fujiWhite)
+
+	accentStyle = lipgloss.NewStyle().
+			Foreground(waveBlue).
+			Bold(true)
+
+	subtleStyle = lipgloss.NewStyle().
+			Foreground(fujiGray)
+
+	projectNameStyle = lipgloss.NewStyle().
+				Foreground(carpYellow).
+				Bold(true)
+
+	techStyle = lipgloss.NewStyle().
+			Foreground(surimiOrange)
+
+	roleStyle = lipgloss.NewStyle().
+			Foreground(springGreen).
+			Bold(true)
+
+	companyStyle = lipgloss.NewStyle().
+			Foreground(waveBlue)
+
+	periodStyle = lipgloss.NewStyle().
+			Foreground(fujiGray).
+			Italic(true)
 )
 
-// Model holds the application state
+// ============================================================================
+// Model
+// ============================================================================
+
 type model struct {
-	choices  []string
-	cursor   int
-	selected map[int]struct{}
+	currentPage   page
+	menuCursor    int
+	projectCursor int
+	expCursor     int
+	width         int
+	height        int
 }
 
-// Initial model
 func initialModel() model {
 	return model{
-		choices: []string{
-			"About Me",
-			"Projects",
-			"Experience",
-			"Contact",
-		},
-		selected: make(map[int]struct{}),
+		currentPage:   menuPage,
+		menuCursor:    0,
+		projectCursor: 0,
+		expCursor:     0,
+		width:         80,
+		height:        24,
 	}
 }
 
-// Init is called when the program starts
+// ============================================================================
+// Bubble Tea Interface
+// ============================================================================
+
 func (m model) Init() tea.Cmd {
 	return nil
 }
 
-// Update handles messages and updates the model
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		return m, nil
+
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "q":
-			return m, tea.Quit
+			if m.currentPage == menuPage {
+				return m, tea.Quit
+			}
+			m.currentPage = menuPage
+			return m, nil
+
+		case "esc", "backspace":
+			if m.currentPage != menuPage {
+				m.currentPage = menuPage
+			}
+			return m, nil
+
 		case "up", "k":
-			if m.cursor > 0 {
-				m.cursor--
+			switch m.currentPage {
+			case menuPage:
+				if m.menuCursor > 0 {
+					m.menuCursor--
+				}
+			case projectsPage:
+				if m.projectCursor > 0 {
+					m.projectCursor--
+				}
+			case experiencePage:
+				if m.expCursor > 0 {
+					m.expCursor--
+				}
 			}
+			return m, nil
+
 		case "down", "j":
-			if m.cursor < len(m.choices)-1 {
-				m.cursor++
+			switch m.currentPage {
+			case menuPage:
+				if m.menuCursor < len(menuItems)-1 {
+					m.menuCursor++
+				}
+			case projectsPage:
+				if m.projectCursor < len(projects)-1 {
+					m.projectCursor++
+				}
+			case experiencePage:
+				if m.expCursor < len(experiences)-1 {
+					m.expCursor++
+				}
 			}
+			return m, nil
+
 		case "enter", " ":
-			_, ok := m.selected[m.cursor]
-			if ok {
-				delete(m.selected, m.cursor)
-			} else {
-				m.selected[m.cursor] = struct{}{}
+			if m.currentPage == menuPage {
+				switch m.menuCursor {
+				case 0:
+					m.currentPage = aboutPage
+				case 1:
+					m.currentPage = projectsPage
+				case 2:
+					m.currentPage = experiencePage
+				case 3:
+					m.currentPage = contactPage
+				}
 			}
+			return m, nil
 		}
 	}
 	return m, nil
 }
 
-// View renders the UI
 func (m model) View() string {
-	s := titleStyle.Render("✨ Welcome to My Portfolio ✨") + "\n\n"
+	var content string
 
-	for i, choice := range m.choices {
+	switch m.currentPage {
+	case menuPage:
+		content = m.renderMenu()
+	case aboutPage:
+		content = m.renderAbout()
+	case projectsPage:
+		content = m.renderProjects()
+	case experiencePage:
+		content = m.renderExperience()
+	case contactPage:
+		content = m.renderContact()
+	}
+
+	// Create bordered box
+	boxWidth := min(m.width-4, 70)
+	box := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(oniViolet).
+		Padding(1, 2).
+		Width(boxWidth)
+
+	boxedContent := box.Render(content)
+
+	// Center in terminal
+	return lipgloss.Place(m.width, m.height,
+		lipgloss.Center, lipgloss.Center,
+		boxedContent)
+}
+
+// ============================================================================
+// Page Renderers
+// ============================================================================
+
+func (m model) renderMenu() string {
+	var b strings.Builder
+
+	// Logo
+	b.WriteString(logoStyle.Render(asciiLogo))
+	b.WriteString("\n\n")
+
+	// Menu items
+	for i, item := range menuItems {
 		cursor := "  "
-		if m.cursor == i {
+		if m.menuCursor == i {
 			cursor = "→ "
 		}
 
-		checked := " "
-		if _, ok := m.selected[i]; ok {
-			checked = "●"
-		}
-
-		line := cursor + "[" + checked + "] " + choice
-		if m.cursor == i {
-			s += selectedStyle.Render(line) + "\n"
+		line := cursor + item
+		if m.menuCursor == i {
+			b.WriteString(selectedStyle.Render(line))
 		} else {
-			s += menuStyle.Render(line) + "\n"
+			b.WriteString(menuStyle.Render(line))
 		}
+		b.WriteString("\n")
 	}
 
-	s += helpStyle.Render("\n↑/↓ or j/k: navigate • enter: select • q: quit")
+	// Help
+	b.WriteString(helpStyle.Render("\n↑/↓: navigate • enter: select • q: quit"))
 
-	return s
+	return b.String()
 }
 
+func (m model) renderAbout() string {
+	var b strings.Builder
+
+	b.WriteString(titleStyle.Render("━━━ About Me ━━━"))
+	b.WriteString("\n")
+	b.WriteString(contentStyle.Render(aboutContent))
+	b.WriteString("\n")
+	b.WriteString(helpStyle.Render("esc: back to menu"))
+
+	return b.String()
+}
+
+func (m model) renderProjects() string {
+	var b strings.Builder
+
+	b.WriteString(titleStyle.Render("━━━ Projects ━━━"))
+	b.WriteString("\n\n")
+
+	for i, p := range projects {
+		cursor := "  "
+		if m.projectCursor == i {
+			cursor = "→ "
+		}
+
+		// Project name
+		name := cursor + p.Name
+		if m.projectCursor == i {
+			b.WriteString(projectNameStyle.Render(name))
+		} else {
+			b.WriteString(menuStyle.Render(name))
+		}
+		b.WriteString("\n")
+
+		// Show details for selected project
+		if m.projectCursor == i {
+			b.WriteString(subtleStyle.Render("    " + p.Desc))
+			b.WriteString("\n")
+			b.WriteString("    ")
+			b.WriteString(techStyle.Render(p.Tech))
+			b.WriteString("\n")
+			b.WriteString("    ")
+			b.WriteString(accentStyle.Render(p.Link))
+			b.WriteString("\n")
+		}
+		b.WriteString("\n")
+	}
+
+	b.WriteString(helpStyle.Render("↑/↓: browse • esc: back to menu"))
+
+	return b.String()
+}
+
+func (m model) renderExperience() string {
+	var b strings.Builder
+
+	b.WriteString(titleStyle.Render("━━━ Experience ━━━"))
+	b.WriteString("\n\n")
+
+	for i, exp := range experiences {
+		cursor := "  "
+		if m.expCursor == i {
+			cursor = "→ "
+		}
+
+		// Role and company
+		line := fmt.Sprintf("%s%s @ %s",
+			cursor,
+			roleStyle.Render(exp.Role),
+			companyStyle.Render(exp.Company))
+		b.WriteString(line)
+		b.WriteString("\n")
+
+		// Period
+		b.WriteString("    ")
+		b.WriteString(periodStyle.Render(exp.Period))
+		b.WriteString("\n")
+
+		// Description (only for selected)
+		if m.expCursor == i {
+			b.WriteString("    ")
+			b.WriteString(contentStyle.Render(exp.Desc))
+			b.WriteString("\n")
+		}
+		b.WriteString("\n")
+	}
+
+	b.WriteString(helpStyle.Render("↑/↓: browse • esc: back to menu"))
+
+	return b.String()
+}
+
+func (m model) renderContact() string {
+	var b strings.Builder
+
+	b.WriteString(titleStyle.Render("━━━ Contact ━━━"))
+	b.WriteString("\n")
+	b.WriteString(contentStyle.Render(contactContent))
+	b.WriteString("\n")
+	b.WriteString(helpStyle.Render("esc: back to menu"))
+
+	return b.String()
+}
+
+// ============================================================================
+// Main
+// ============================================================================
+
 func main() {
-	// Accept any public key (open to all)
 	publicKeyAuth := func(ctx ssh.Context, key ssh.PublicKey) bool {
 		return true
 	}
 
-	// Create a Bubble Tea handler for SSH sessions
 	teaHandler := func(s ssh.Session) (tea.Model, []tea.ProgramOption) {
 		return initialModel(), []tea.ProgramOption{tea.WithAltScreen()}
 	}
