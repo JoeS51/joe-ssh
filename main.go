@@ -16,13 +16,28 @@ import (
 // ASCII Art & Content
 // ============================================================================
 
-var asciiLogo = `
-     ██╗ ██████╗ ███████╗
-     ██║██╔═══██╗██╔════╝
-     ██║██║   ██║█████╗  
-██   ██║██║   ██║██╔══╝  
-╚█████╔╝╚██████╔╝███████╗
- ╚════╝  ╚═════╝ ╚══════╝`
+var asciiLogoLines = []string{
+	"      ▄█  ▄██████▄     ▄████████ ",
+	"     ███ ███    ███   ███    ███ ",
+	"     ███ ███    ███   ███    █▀  ",
+	"     ███ ███    ███  ▄███▄▄▄     ",
+	"     ███ ███    ███ ▀▀███▀▀▀     ",
+	"     ███ ███    ███   ███    █▄  ",
+	"█    ███ ███    ███   ███    ███ ",
+	"█▄ ▄▄███  ▀██████▀    ██████████ ",
+}
+
+func renderGradientLogo() string {
+	var result strings.Builder
+	style := lipgloss.NewStyle().Foreground(oniViolet).Bold(true)
+	for i, line := range asciiLogoLines {
+		result.WriteString(style.Render(line))
+		if i < len(asciiLogoLines)-1 {
+			result.WriteString("\n")
+		}
+	}
+	return result.String()
+}
 
 var aboutContent = `
 Hi! I'm Joe, a software developer passionate about building
@@ -340,7 +355,7 @@ func (m model) renderMenu() string {
 	var b strings.Builder
 
 	// Logo
-	b.WriteString(logoStyle.Render(asciiLogo))
+	b.WriteString(renderGradientLogo())
 	b.WriteString("\n\n")
 
 	// Menu items
