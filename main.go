@@ -48,16 +48,15 @@ I love working on:
   • Terminal applications and CLI tools
   • Cloud infrastructure and DevOps
 
-Currently exploring Go, Rust, and distributed systems.
+Currently exploring Rust, React Internals and distributed systems.
 `
 
 var contactContent = `
 Feel free to reach out!
 
-  GitHub      github.com/joe
-  Email       joe@example.com
-  LinkedIn    linkedin.com/in/joe
-  Twitter     @joe
+  GitHub      github.com/JoeS51
+  Email       joesluis51@gmail.com
+  LinkedIn    linkedin.com/in/joesluis/
 `
 
 // ============================================================================
@@ -107,22 +106,22 @@ var projects = []Project{
 
 var experiences = []Experience{
 	{
-		Role:    "Senior Software Engineer",
-		Company: "Tech Corp",
-		Period:  "2023 - Present",
-		Desc:    "Leading backend development for core platform services.",
-	},
-	{
 		Role:    "Software Engineer",
-		Company: "Startup Inc",
-		Period:  "2021 - 2023",
-		Desc:    "Built microservices architecture and CI/CD pipelines.",
+		Company: "Microsoft",
+		Period:  "2025 - Present",
+		Desc:    "Azure SQL VM team",
 	},
 	{
-		Role:    "Junior Developer",
-		Company: "Dev Agency",
-		Period:  "2019 - 2021",
-		Desc:    "Full-stack web development for various client projects.",
+		Role:    "Software Engineer Intern",
+		Company: "Jenni AI",
+		Period:  "2024 - 2025",
+		Desc:    "Develop new product that reviews manuscripts for Jenni AI",
+	},
+	{
+		Role:    "Software Engineer Intern",
+		Company: "Blue Origin",
+		Period:  "Fall 2023",
+		Desc:    "New Glenn Rocket Software",
 	},
 }
 
@@ -497,7 +496,7 @@ func main() {
 	}
 
 	s, err := wish.NewServer(
-		wish.WithAddress("127.0.0.1:23234"),
+		wish.WithAddress("0.0.0.0:2222"),
 		wish.WithHostKeyPath(".ssh/host_ed25519"),
 		wish.WithPublicKeyAuth(publicKeyAuth),
 		wish.WithMiddleware(
