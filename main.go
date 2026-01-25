@@ -16,7 +16,7 @@ import (
 // ASCII Art & Content
 // ============================================================================
 
-var asciiLogoLines = []string{
+var blockLogoLines = []string{
 	"      ▄█  ▄██████▄     ▄████████ ",
 	"     ███ ███    ███   ███    ███ ",
 	"     ███ ███    ███   ███    █▀  ",
@@ -27,16 +27,44 @@ var asciiLogoLines = []string{
 	"█▄ ▄▄███  ▀██████▀    ██████████ ",
 }
 
-func renderGradientLogo() string {
+var asciiLogoLines = []string{
+	`              __       __           __      `,
+	`            /\ \     /\ \         /\ \    `,
+	`            \ \ \   /  \ \       /  \ \   `,
+	`            /\ \_\ / /\ \ \     / /\ \ \  `,
+	`           / /\/_// / /\ \ \   / / /\ \_\ `,
+	`  __      / / /  / / /  \ \_\ / /_/_ \/_/ `,
+	` /\ \    / / /  / / /   / / // /____/\    `,
+	` \ \_\  / / /  / / /   / / // /\____\/    `,
+	` / / /_/ / /  / / /___/ / // / /______    `,
+	`/ / /__\/ /  / / /____\/ // / /_______\   `,
+	`\/_______/   \/_________/ \/__________/   `,
+}
+
+var asciiLogoLines3 = []string{
+	"     ██╗ ██████╗ ███████╗",
+	"     ██║██╔═══██╗██╔════╝",
+	"     ██║██║   ██║█████╗  ",
+	"██   ██║██║   ██║██╔══╝  ",
+	"╚█████╔╝╚██████╔╝███████╗",
+	" ╚════╝  ╚═════╝ ╚══════╝",
+}
+
+func renderGradientLogo(width int) string {
 	var result strings.Builder
 	style := lipgloss.NewStyle().Foreground(oniViolet).Bold(true)
+	
 	for i, line := range asciiLogoLines {
 		result.WriteString(style.Render(line))
 		if i < len(asciiLogoLines)-1 {
 			result.WriteString("\n")
 		}
 	}
-	return result.String()
+	
+	// Center the entire logo block
+	logoBlock := result.String()
+	centered := lipgloss.NewStyle().Width(width).Align(lipgloss.Center).Render(logoBlock)
+	return centered
 }
 
 var aboutContent = `
@@ -354,7 +382,7 @@ func (m model) renderMenu() string {
 	var b strings.Builder
 
 	// Logo
-	b.WriteString(renderGradientLogo())
+	b.WriteString(renderGradientLogo(60))
 	b.WriteString("\n\n")
 
 	// Menu items
