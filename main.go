@@ -174,15 +174,25 @@ var menuItems = []string{"About", "Projects", "Experience", "Contact"}
 // ============================================================================
 
 var (
-	// Colors
-	oniViolet   = lipgloss.Color("#957FB8")
-	fujiWhite   = lipgloss.Color("#DCD7BA")
-	springGreen = lipgloss.Color("#98BB6C")
-	fujiGray    = lipgloss.Color("#727169")
-	waveBlue    = lipgloss.Color("#7E9CD8")
-	surimiOrange = lipgloss.Color("#FFA066")
-	autumnRed   = lipgloss.Color("#C34043")
-	carpYellow  = lipgloss.Color("#E6C384")
+	// Kanagawa Colors - Muted, subtle, old-school terminal aesthetic
+	warmWhite    = lipgloss.Color("#D8DEE9") // cool white with hint of blue (titles)
+	lightGray    = lipgloss.Color("#9CA0A4") // light gray (main text)
+	selectedGray = lipgloss.Color("#C8C8C8") // slightly brighter (selected)
+	mutedGray    = lipgloss.Color("#727169") // muted gray (help text)
+	softBlue     = lipgloss.Color("#7E9CD8") // soft blue
+	mutedOrange  = lipgloss.Color("#FFA066") // muted orange
+	deepRed      = lipgloss.Color("#C34043") // deep red
+	softGold     = lipgloss.Color("#E6C384") // soft gold
+	
+	// Aliases for compatibility
+	oniViolet    = warmWhite    // titles/borders - warm off-white
+	fujiWhite    = lightGray    // main text - light gray
+	springGreen  = selectedGray // selected - slightly brighter
+	fujiGray     = mutedGray    // help text
+	waveBlue     = softBlue     // links
+	surimiOrange = mutedOrange  // tech tags
+	autumnRed    = deepRed
+	carpYellow   = softGold     // project names
 
 	// Styles
 	logoStyle = lipgloss.NewStyle().
