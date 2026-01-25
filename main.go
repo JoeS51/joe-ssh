@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -11,6 +12,9 @@ import (
 	"github.com/charmbracelet/wish"
 	"github.com/charmbracelet/wish/bubbletea"
 )
+
+// Animation tick message
+type tickMsg time.Time
 
 // ============================================================================
 // ASCII Art & Content
@@ -50,12 +54,23 @@ var asciiLogoLines3 = []string{
 	" ╚════╝  ╚═════╝ ╚══════╝",
 }
 
-func renderGradientLogo(width int) string {
+func renderGradientLogo(width int, linesRevealed int) string {
 	var result strings.Builder
 	style := lipgloss.NewStyle().Foreground(oniViolet).Bold(true)
 	
-	for i, line := range asciiLogoLines {
-		result.WriteString(style.Render(line))
+	// Only show revealed lines
+	linesToShow := linesRevealed
+	if linesToShow > len(asciiLogoLines) {
+		linesToShow = len(asciiLogoLines)
+	}
+	
+	for i := 0; i < len(asciiLogoLines); i++ {
+		if i < linesToShow {
+			result.WriteString(style.Render(asciiLogoLines[i]))
+		} else {
+			// Empty line to maintain spacing
+			result.WriteString(strings.Repeat(" ", len(asciiLogoLines[i])))
+		}
 		if i < len(asciiLogoLines)-1 {
 			result.WriteString("\n")
 		}
@@ -250,22 +265,26 @@ var (
 // ============================================================================
 
 type model struct {
-	currentPage   page
-	menuCursor    int
-	projectCursor int
-	expCursor     int
-	width         int
-	height        int
+	currentPage      page
+	menuCursor       int
+	projectCursor    int
+	expCursor        int
+	width            int
+	height           int
+	logoLinesRevealed int
+	animationDone    bool
 }
 
 func initialModel() model {
 	return model{
-		currentPage:   menuPage,
-		menuCursor:    0,
-		projectCursor: 0,
-		expCursor:     0,
-		width:         80,
-		height:        24,
+		currentPage:      menuPage,
+		menuCursor:       0,
+		projectCursor:    0,
+		expCursor:        0,
+		width:            80,
+		height:           24,
+		logoLinesRevealed: 0,
+		animationDone:    false,
 	}
 }
 
@@ -274,11 +293,27 @@ func initialModel() model {
 // ============================================================================
 
 func (m model) Init() tea.Cmd {
-	return nil
+	// Start the logo animation
+	return tea.Tick(100*time.Millisecond, func(t time.Time) tea.Msg {
+		return tickMsg(t)
+	})
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tickMsg:
+		if !m.animationDone && m.currentPage == menuPage {
+			m.logoLinesRevealed++
+			if m.logoLinesRevealed >= len(asciiLogoLines) {
+				m.animationDone = true
+				return m, nil
+			}
+			return m, tea.Tick(100*time.Millisecond, func(t time.Time) tea.Msg {
+				return tickMsg(t)
+			})
+		}
+		return m, nil
+
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -391,8 +426,8 @@ func (m model) View() string {
 func (m model) renderMenu() string {
 	var b strings.Builder
 
-	// Logo
-	b.WriteString(renderGradientLogo(60))
+	// Logo with animation
+	b.WriteString(renderGradientLogo(60, m.logoLinesRevealed))
 	b.WriteString("\n\n")
 
 	// Menu items
