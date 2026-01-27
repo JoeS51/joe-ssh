@@ -1,5 +1,10 @@
-# Go binary
+# macOS
+.DS_Store
+
+# Go binaries / build output
 ssh-server
+ssh-server-linux
+bin/
 
 # SSH host keys (private key is secret!)
 .ssh/
