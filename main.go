@@ -16,6 +16,10 @@ import (
 // Animation tick message
 type tickMsg time.Time
 
+func clickableLink(label, url string) string {
+	return "\x1b]8;;" + url + "\x1b\\" + label + "\x1b]8;;\x1b\\"
+}
+
 // ============================================================================
 // ASCII Art & Content
 // ============================================================================
@@ -57,13 +61,13 @@ var asciiLogoLines3 = []string{
 func renderGradientLogo(width int, linesRevealed int) string {
 	var result strings.Builder
 	style := lipgloss.NewStyle().Foreground(oniViolet).Bold(true)
-	
+
 	// Only show revealed lines
 	linesToShow := linesRevealed
 	if linesToShow > len(asciiLogoLines) {
 		linesToShow = len(asciiLogoLines)
 	}
-	
+
 	for i := 0; i < len(asciiLogoLines); i++ {
 		if i < linesToShow {
 			result.WriteString(style.Render(asciiLogoLines[i]))
@@ -75,7 +79,7 @@ func renderGradientLogo(width int, linesRevealed int) string {
 			result.WriteString("\n")
 		}
 	}
-	
+
 	// Center the entire logo block
 	logoBlock := result.String()
 	centered := lipgloss.NewStyle().Width(width).Align(lipgloss.Center).Render(logoBlock)
@@ -97,9 +101,9 @@ Currently exploring Rust, React Internals and distributed systems.
 var contactContent = `
 Feel free to reach out!
 
-  GitHub      github.com/JoeS51
-  Email       joesluis51@gmail.com
-  LinkedIn    linkedin.com/in/joesluis/
+  GitHub      %s
+  Email       %s
+  LinkedIn    %s
 `
 
 // ============================================================================
@@ -198,7 +202,7 @@ var (
 	mutedOrange  = lipgloss.Color("#FFA066") // muted orange
 	deepRed      = lipgloss.Color("#C34043") // deep red
 	softGold     = lipgloss.Color("#E6C384") // soft gold
-	
+
 	// Aliases for compatibility
 	oniViolet    = warmWhite    // titles/borders - warm off-white
 	fujiWhite    = lightGray    // main text - light gray
@@ -207,7 +211,7 @@ var (
 	waveBlue     = softBlue     // links
 	surimiOrange = mutedOrange  // tech tags
 	autumnRed    = deepRed
-	carpYellow   = softGold     // project names
+	carpYellow   = softGold // project names
 
 	// Styles
 	logoStyle = lipgloss.NewStyle().
@@ -265,26 +269,26 @@ var (
 // ============================================================================
 
 type model struct {
-	currentPage      page
-	menuCursor       int
-	projectCursor    int
-	expCursor        int
-	width            int
-	height           int
+	currentPage       page
+	menuCursor        int
+	projectCursor     int
+	expCursor         int
+	width             int
+	height            int
 	logoLinesRevealed int
-	animationDone    bool
+	animationDone     bool
 }
 
 func initialModel() model {
 	return model{
-		currentPage:      menuPage,
-		menuCursor:       0,
-		projectCursor:    0,
-		expCursor:        0,
-		width:            80,
-		height:           24,
+		currentPage:       menuPage,
+		menuCursor:        0,
+		projectCursor:     0,
+		expCursor:         0,
+		width:             80,
+		height:            24,
 		logoLinesRevealed: 0,
-		animationDone:    false,
+		animationDone:     false,
 	}
 }
 
@@ -426,6 +430,10 @@ func (m model) View() string {
 func (m model) renderMenu() string {
 	var b strings.Builder
 
+	// Short welcome line before the animated logo.
+	b.WriteString(subtleStyle.Render("Loading portfolio..."))
+	b.WriteString("\n\n")
+
 	// Logo with animation
 	b.WriteString(renderGradientLogo(60, m.logoLinesRevealed))
 	b.WriteString("\n\n")
@@ -447,7 +455,7 @@ func (m model) renderMenu() string {
 	}
 
 	// Help
-	b.WriteString(helpStyle.Render("\n↑/↓: navigate • enter: select • q: quit"))
+	b.WriteString(helpStyle.Render("\n↑/↓: navigate • enter: select • esc/backspace: menu • q: quit"))
 
 	return b.String()
 }
@@ -493,7 +501,11 @@ func (m model) renderProjects() string {
 			b.WriteString(techStyle.Render(p.Tech))
 			b.WriteString("\n")
 			b.WriteString("    ")
-			b.WriteString(accentStyle.Render(p.Link))
+			projectURL := p.Link
+			if !strings.HasPrefix(projectURL, "http://") && !strings.HasPrefix(projectURL, "https://") {
+				projectURL = "https://" + projectURL
+			}
+			b.WriteString(accentStyle.Render(clickableLink(projectURL, projectURL)))
 			b.WriteString("\n")
 		}
 		b.WriteString("\n")
@@ -548,7 +560,19 @@ func (m model) renderContact() string {
 
 	b.WriteString(titleStyle.Render("━━━ Contact ━━━"))
 	b.WriteString("\n")
-	b.WriteString(contentStyle.Render(contactContent))
+
+	githubURL := "https://github.com/JoeS51"
+	mailtoURL := "mailto:joesluis51@gmail.com"
+	linkedinURL := "https://linkedin.com/in/joesluis/"
+
+	contact := fmt.Sprintf(
+		contactContent,
+		clickableLink(githubURL, githubURL),
+		clickableLink("joesluis51@gmail.com", mailtoURL),
+		clickableLink(linkedinURL, linkedinURL),
+	)
+
+	b.WriteString(contentStyle.Render(contact))
 	b.WriteString("\n")
 	b.WriteString(helpStyle.Render("esc: back to menu"))
 
