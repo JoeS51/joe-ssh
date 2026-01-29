@@ -24,19 +24,8 @@ func clickableLink(label, url string) string {
 // ASCII Art & Content
 // ============================================================================
 
-var blockLogoLines = []string{
-	"      ▄█  ▄██████▄     ▄████████ ",
-	"     ███ ███    ███   ███    ███ ",
-	"     ███ ███    ███   ███    █▀  ",
-	"     ███ ███    ███  ▄███▄▄▄     ",
-	"     ███ ███    ███ ▀▀███▀▀▀     ",
-	"     ███ ███    ███   ███    █▄  ",
-	"█    ███ ███    ███   ███    ███ ",
-	"█▄ ▄▄███  ▀██████▀    ██████████ ",
-}
-
 var asciiLogoLines = []string{
-	`              __       __           __      `,
+	`             __       __           __      `,
 	`            /\ \     /\ \         /\ \    `,
 	`            \ \ \   /  \ \       /  \ \   `,
 	`            /\ \_\ / /\ \ \     / /\ \ \  `,
@@ -49,33 +38,111 @@ var asciiLogoLines = []string{
 	`\/_______/   \/_________/ \/__________/   `,
 }
 
-var asciiLogoLines3 = []string{
-	"     ██╗ ██████╗ ███████╗",
-	"     ██║██╔═══██╗██╔════╝",
-	"     ██║██║   ██║█████╗  ",
-	"██   ██║██║   ██║██╔══╝  ",
-	"╚█████╔╝╚██████╔╝███████╗",
-	" ╚════╝  ╚═════╝ ╚══════╝",
-}
-
-func renderGradientLogo(width int, linesRevealed int) string {
+func renderGradientLogo(width int, sweepIndex int) string {
 	var result strings.Builder
-	style := lipgloss.NewStyle().Foreground(oniViolet).Bold(true)
 
-	// Only show revealed lines
-	linesToShow := linesRevealed
-	if linesToShow > len(asciiLogoLines) {
-		linesToShow = len(asciiLogoLines)
+	baseStyle := lipgloss.NewStyle().Foreground(oniViolet).Bold(true)
+	snakeStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#9EC5FF")).Bold(true)
+
+	linesToShow := len(asciiLogoLines)
+
+	// Determine the bounding box of the logo.
+	maxLineLen := 0
+	for i := 0; i < linesToShow; i++ {
+		if len(asciiLogoLines[i]) > maxLineLen {
+			maxLineLen = len(asciiLogoLines[i])
+		}
 	}
 
-	for i := 0; i < len(asciiLogoLines); i++ {
-		if i < linesToShow {
-			result.WriteString(style.Render(asciiLogoLines[i]))
-		} else {
-			// Empty line to maintain spacing
-			result.WriteString(strings.Repeat(" ", len(asciiLogoLines[i])))
+	if linesToShow == 0 || maxLineLen == 0 {
+		return lipgloss.NewStyle().Width(width).Align(lipgloss.Center).Render("")
+	}
+
+	// Add a 1-cell padding around the logo so the snake can run "around" it
+	// without overwriting the text.
+	pad := 1
+	gridW := maxLineLen + pad*2
+	gridH := linesToShow + pad*2
+
+	// Build the base grid with the logo centered within the padding.
+	baseGrid := make([][]rune, gridH)
+	for y := 0; y < gridH; y++ {
+		row := make([]rune, gridW)
+		for x := 0; x < gridW; x++ {
+			row[x] = ' '
 		}
-		if i < len(asciiLogoLines)-1 {
+		baseGrid[y] = row
+	}
+
+	for i := 0; i < linesToShow; i++ {
+		lineRunes := []rune(asciiLogoLines[i])
+		for j, r := range lineRunes {
+			baseGrid[pad+i][pad+j] = r
+		}
+	}
+
+	// Build the perimeter path (outer border of the padded grid).
+	type pt struct{ x, y int }
+	path := make([]pt, 0, gridW*2+gridH*2)
+
+	// Top edge (left -> right)
+	for x := 0; x < gridW; x++ {
+		path = append(path, pt{x: x, y: 0})
+	}
+	// Right edge (top+1 -> bottom-1)
+	for y := 1; y < gridH-1; y++ {
+		path = append(path, pt{x: gridW - 1, y: y})
+	}
+	// Bottom edge (right -> left)
+	if gridH > 1 {
+		for x := gridW - 1; x >= 0; x-- {
+			path = append(path, pt{x: x, y: gridH - 1})
+		}
+	}
+	// Left edge (bottom-1 -> top+1)
+	if gridW > 1 {
+		for y := gridH - 2; y >= 1; y-- {
+			path = append(path, pt{x: 0, y: y})
+		}
+	}
+
+	pathLen := len(path)
+	if pathLen == 0 {
+		return lipgloss.NewStyle().Width(width).Align(lipgloss.Center).Render("")
+	}
+
+	// Render a short moving "snake" segment along the perimeter path.
+	snakeLen := 14
+	if snakeLen > pathLen {
+		snakeLen = pathLen
+	}
+	start := sweepIndex % pathLen
+
+	snakeGrid := make([][]bool, gridH)
+	for y := 0; y < gridH; y++ {
+		snakeGrid[y] = make([]bool, gridW)
+	}
+	for i := 0; i < snakeLen; i++ {
+		idx := (start + i) % pathLen
+		p := path[idx]
+		snakeGrid[p.y][p.x] = true
+	}
+
+	// Merge the grids into a styled string.
+	for y := 0; y < gridH; y++ {
+		for x := 0; x < gridW; x++ {
+			if snakeGrid[y][x] {
+				result.WriteString(snakeStyle.Render("•"))
+				continue
+			}
+			ch := string(baseGrid[y][x])
+			if baseGrid[y][x] == ' ' {
+				result.WriteString(ch)
+			} else {
+				result.WriteString(baseStyle.Render(ch))
+			}
+		}
+		if y < gridH-1 {
 			result.WriteString("\n")
 		}
 	}
@@ -87,13 +154,7 @@ func renderGradientLogo(width int, linesRevealed int) string {
 }
 
 var aboutContent = `
-Hi! I'm Joe, a software developer passionate about building
-great user experiences and exploring new technologies.
-
-I love working on:
-  • Backend systems and APIs
-  • Terminal applications and CLI tools
-  • Cloud infrastructure and DevOps
+Hey, I'm Joe, a software developer interested in building entertaining or useful things.
 
 Currently exploring Rust, React Internals and distributed systems.
 `
@@ -127,27 +188,21 @@ type Experience struct {
 var projects = []Project{
 	{
 		Name: "SSH Portfolio",
-		Desc: "This very app! A terminal-based portfolio accessible via SSH.",
+		Desc: "This app",
 		Tech: "Go, Bubble Tea, Wish",
 		Link: "github.com/joe/ssh-portfolio",
 	},
 	{
-		Name: "Task Manager CLI",
-		Desc: "A command-line task manager with local storage and sync.",
-		Tech: "Rust, SQLite",
-		Link: "github.com/joe/task-cli",
+		Name: "React From Scratch",
+		Desc: "Build React from scratch",
+		Tech: "JavaScript",
+		Link: "github.com/joe/react-0.5",
 	},
 	{
-		Name: "API Gateway",
-		Desc: "High-performance API gateway with rate limiting and caching.",
-		Tech: "Go, Redis, Docker",
+		Name: "HTTP Server From Scratch",
+		Desc: "Build a HTTP server from scratch using TCP and HTTP/1.1",
+		Tech: "Rust",
 		Link: "github.com/joe/api-gateway",
-	},
-	{
-		Name: "Chat Application",
-		Desc: "Real-time chat with WebSocket support and E2E encryption.",
-		Tech: "TypeScript, Node.js, React",
-		Link: "github.com/joe/chat-app",
 	},
 }
 
@@ -162,7 +217,7 @@ var experiences = []Experience{
 		Role:    "Software Engineer Intern",
 		Company: "Jenni AI",
 		Period:  "2024 - 2025",
-		Desc:    "Develop new product that reviews manuscripts for Jenni AI",
+		Desc:    "Developed new product that reviews manuscripts for Jenni AI",
 	},
 	{
 		Role:    "Software Engineer Intern",
@@ -200,7 +255,6 @@ var (
 	mutedGray    = lipgloss.Color("#727169") // muted gray (help text)
 	softBlue     = lipgloss.Color("#7E9CD8") // soft blue
 	mutedOrange  = lipgloss.Color("#FFA066") // muted orange
-	deepRed      = lipgloss.Color("#C34043") // deep red
 	softGold     = lipgloss.Color("#E6C384") // soft gold
 
 	// Aliases for compatibility
@@ -210,15 +264,9 @@ var (
 	fujiGray     = mutedGray    // help text
 	waveBlue     = softBlue     // links
 	surimiOrange = mutedOrange  // tech tags
-	autumnRed    = deepRed
-	carpYellow   = softGold // project names
+	carpYellow   = softGold     // project names
 
 	// Styles
-	logoStyle = lipgloss.NewStyle().
-			Foreground(oniViolet).
-			Bold(true).
-			MarginBottom(1)
-
 	titleStyle = lipgloss.NewStyle().
 			Foreground(oniViolet).
 			Bold(true).
@@ -269,26 +317,24 @@ var (
 // ============================================================================
 
 type model struct {
-	currentPage       page
-	menuCursor        int
-	projectCursor     int
-	expCursor         int
-	width             int
-	height            int
-	logoLinesRevealed int
-	animationDone     bool
+	currentPage    page
+	menuCursor     int
+	projectCursor  int
+	expCursor      int
+	width          int
+	height         int
+	logoSweepIndex int
 }
 
 func initialModel() model {
 	return model{
-		currentPage:       menuPage,
-		menuCursor:        0,
-		projectCursor:     0,
-		expCursor:         0,
-		width:             80,
-		height:            24,
-		logoLinesRevealed: 0,
-		animationDone:     false,
+		currentPage:    menuPage,
+		menuCursor:     0,
+		projectCursor:  0,
+		expCursor:      0,
+		width:          80,
+		height:         24,
+		logoSweepIndex: 0,
 	}
 }
 
@@ -297,8 +343,8 @@ func initialModel() model {
 // ============================================================================
 
 func (m model) Init() tea.Cmd {
-	// Start the logo animation
-	return tea.Tick(100*time.Millisecond, func(t time.Time) tea.Msg {
+	// Start the snake animation tick.
+	return tea.Tick(50*time.Millisecond, func(t time.Time) tea.Msg {
 		return tickMsg(t)
 	})
 }
@@ -306,13 +352,9 @@ func (m model) Init() tea.Cmd {
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tickMsg:
-		if !m.animationDone && m.currentPage == menuPage {
-			m.logoLinesRevealed++
-			if m.logoLinesRevealed >= len(asciiLogoLines) {
-				m.animationDone = true
-				return m, nil
-			}
-			return m, tea.Tick(100*time.Millisecond, func(t time.Time) tea.Msg {
+		if m.currentPage == menuPage {
+			m.logoSweepIndex++
+			return m, tea.Tick(50*time.Millisecond, func(t time.Time) tea.Msg {
 				return tickMsg(t)
 			})
 		}
@@ -430,12 +472,8 @@ func (m model) View() string {
 func (m model) renderMenu() string {
 	var b strings.Builder
 
-	// Short welcome line before the animated logo.
-	b.WriteString(subtleStyle.Render("Loading portfolio..."))
-	b.WriteString("\n\n")
-
 	// Logo with animation
-	b.WriteString(renderGradientLogo(60, m.logoLinesRevealed))
+	b.WriteString(renderGradientLogo(60, m.logoSweepIndex))
 	b.WriteString("\n\n")
 
 	// Menu items
@@ -587,15 +625,20 @@ func main() {
 	publicKeyAuth := func(ctx ssh.Context, key ssh.PublicKey) bool {
 		return true
 	}
+	passwordAuth := func(ctx ssh.Context, password string) bool {
+		// Allow password auth as a fallback for clients without keys.
+		return true
+	}
 
 	teaHandler := func(s ssh.Session) (tea.Model, []tea.ProgramOption) {
 		return initialModel(), []tea.ProgramOption{tea.WithAltScreen()}
 	}
 
 	s, err := wish.NewServer(
-		wish.WithAddress("0.0.0.0:2222"),
+		wish.WithAddress("0.0.0.0:22"),
 		wish.WithHostKeyPath(".ssh/host_ed25519"),
 		wish.WithPublicKeyAuth(publicKeyAuth),
+		wish.WithPasswordAuth(passwordAuth),
 		wish.WithMiddleware(
 			bubbletea.Middleware(teaHandler),
 		),
