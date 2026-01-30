@@ -454,15 +454,12 @@ func (m model) View() string {
 		content = m.renderContact()
 	}
 
-	// Create bordered box
+	// Render content without an outer border
 	boxWidth := min(m.width-4, 70)
-	box := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(oniViolet).
+	boxedContent := lipgloss.NewStyle().
 		Padding(1, 2).
-		Width(boxWidth)
-
-	boxedContent := box.Render(content)
+		Width(boxWidth).
+		Render(content)
 
 	// Center in terminal
 	return lipgloss.Place(m.width, m.height,
