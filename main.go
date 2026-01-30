@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/ssh"
 	"github.com/charmbracelet/wish"
 	"github.com/charmbracelet/wish/bubbletea"
+	"github.com/muesli/termenv"
 )
 
 // Animation tick message
@@ -156,7 +157,7 @@ func renderGradientLogo(width int, sweepIndex int) string {
 var aboutContent = `
 Hey, I'm Joe, a software developer interested in building entertaining or useful things.
 
-Currently exploring Rust, React Internals and distributed systems.
+Currently exploring React Internals and distributed systems.
 `
 
 var contactContent = `
@@ -194,7 +195,7 @@ var projects = []Project{
 	},
 	{
 		Name: "React From Scratch",
-		Desc: "Build React from scratch",
+		Desc: "Built a toy React from scratch",
 		Tech: "JavaScript",
 		Link: "github.com/joe/react-0.5",
 	},
@@ -244,27 +245,27 @@ const (
 var menuItems = []string{"About", "Projects", "Experience", "Contact"}
 
 // ============================================================================
-// Styles (Kanagawa Theme)
+// Styles (Tokyo Night Theme)
 // ============================================================================
 
 var (
-	// Kanagawa Colors - Muted, subtle, old-school terminal aesthetic
-	warmWhite    = lipgloss.Color("#D8DEE9") // cool white with hint of blue (titles)
-	lightGray    = lipgloss.Color("#9CA0A4") // light gray (main text)
-	selectedGray = lipgloss.Color("#C8C8C8") // slightly brighter (selected)
-	mutedGray    = lipgloss.Color("#727169") // muted gray (help text)
-	softBlue     = lipgloss.Color("#7E9CD8") // soft blue
-	mutedOrange  = lipgloss.Color("#FFA066") // muted orange
-	softGold     = lipgloss.Color("#E6C384") // soft gold
+	// Tokyo Night palette
+	tokyoFg      = lipgloss.Color("#C0CAF5") // primary text
+	tokyoFgAlt   = lipgloss.Color("#A9B1D6") // secondary text
+	tokyoMuted   = lipgloss.Color("#565F89") // muted/help text
+	tokyoBlue    = lipgloss.Color("#7AA2F7") // title/border
+	tokyoCyan    = lipgloss.Color("#7DCFFF") // links
+	tokyoPurple  = lipgloss.Color("#BB9AF7") // selected highlight
+	tokyoGreen   = lipgloss.Color("#9ECE6A") // tech tags
 
 	// Aliases for compatibility
-	oniViolet    = warmWhite    // titles/borders - warm off-white
-	fujiWhite    = lightGray    // main text - light gray
-	springGreen  = selectedGray // selected - slightly brighter
-	fujiGray     = mutedGray    // help text
-	waveBlue     = softBlue     // links
-	surimiOrange = mutedOrange  // tech tags
-	carpYellow   = softGold     // project names
+	oniViolet    = tokyoBlue   // titles/borders
+	fujiWhite    = tokyoFg     // main text
+	springGreen  = tokyoPurple // selected
+	fujiGray     = tokyoMuted  // help text
+	waveBlue     = tokyoCyan   // links
+	surimiOrange = tokyoGreen  // tech tags
+	carpYellow   = tokyoBlue   // project names
 
 	// Styles
 	titleStyle = lipgloss.NewStyle().
@@ -344,9 +345,7 @@ func initialModel() model {
 
 func (m model) Init() tea.Cmd {
 	// Start the snake animation tick.
-	return tea.Tick(50*time.Millisecond, func(t time.Time) tea.Msg {
-		return tickMsg(t)
-	})
+	return tickCmd()
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -372,13 +371,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			}
 			m.currentPage = menuPage
-			return m, nil
+			return m, tickCmd()
 
 		case "esc", "backspace":
 			if m.currentPage != menuPage {
 				m.currentPage = menuPage
 			}
-			return m, nil
+			return m, tickCmd()
 
 		case "up", "k":
 			switch m.currentPage {
@@ -431,6 +430,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 	return m, nil
+}
+
+func tickCmd() tea.Cmd {
+	return tea.Tick(50*time.Millisecond, func(t time.Time) tea.Msg {
+		return tickMsg(t)
+	})
 }
 
 func (m model) View() string {
@@ -611,6 +616,7 @@ func (m model) renderContact() string {
 	)
 
 	b.WriteString(contentStyle.Render(contact))
+
 	b.WriteString("\n")
 	b.WriteString(helpStyle.Render("esc: back to menu"))
 
@@ -622,6 +628,9 @@ func (m model) renderContact() string {
 // ============================================================================
 
 func main() {
+	// Force 256-color output for terminals that support it, even under systemd.
+	lipgloss.SetColorProfile(termenv.ANSI256)
+
 	publicKeyAuth := func(ctx ssh.Context, key ssh.PublicKey) bool {
 		return true
 	}
