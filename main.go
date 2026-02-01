@@ -14,16 +14,11 @@ import (
 	"github.com/muesli/termenv"
 )
 
-// Animation tick message
 type tickMsg time.Time
 
 func clickableLink(label, url string) string {
 	return "\x1b]8;;" + url + "\x1b\\" + label + "\x1b]8;;\x1b\\"
 }
-
-// ============================================================================
-// ASCII Art & Content
-// ============================================================================
 
 var asciiLogoLines = []string{
 	`             __       __           __      `,
@@ -47,7 +42,6 @@ func renderGradientLogo(width int, sweepIndex int) string {
 
 	linesToShow := len(asciiLogoLines)
 
-	// Determine the bounding box of the logo.
 	maxLineLen := 0
 	for i := 0; i < linesToShow; i++ {
 		if len(asciiLogoLines[i]) > maxLineLen {
@@ -59,13 +53,10 @@ func renderGradientLogo(width int, sweepIndex int) string {
 		return lipgloss.NewStyle().Width(width).Align(lipgloss.Center).Render("")
 	}
 
-	// Add a 1-cell padding around the logo so the snake can run "around" it
-	// without overwriting the text.
 	pad := 1
 	gridW := maxLineLen + pad*2
 	gridH := linesToShow + pad*2
 
-	// Build the base grid with the logo centered within the padding.
 	baseGrid := make([][]rune, gridH)
 	for y := 0; y < gridH; y++ {
 		row := make([]rune, gridW)
@@ -82,25 +73,20 @@ func renderGradientLogo(width int, sweepIndex int) string {
 		}
 	}
 
-	// Build the perimeter path (outer border of the padded grid).
 	type pt struct{ x, y int }
 	path := make([]pt, 0, gridW*2+gridH*2)
 
-	// Top edge (left -> right)
 	for x := 0; x < gridW; x++ {
 		path = append(path, pt{x: x, y: 0})
 	}
-	// Right edge (top+1 -> bottom-1)
 	for y := 1; y < gridH-1; y++ {
 		path = append(path, pt{x: gridW - 1, y: y})
 	}
-	// Bottom edge (right -> left)
 	if gridH > 1 {
 		for x := gridW - 1; x >= 0; x-- {
 			path = append(path, pt{x: x, y: gridH - 1})
 		}
 	}
-	// Left edge (bottom-1 -> top+1)
 	if gridW > 1 {
 		for y := gridH - 2; y >= 1; y-- {
 			path = append(path, pt{x: 0, y: y})
@@ -112,7 +98,6 @@ func renderGradientLogo(width int, sweepIndex int) string {
 		return lipgloss.NewStyle().Width(width).Align(lipgloss.Center).Render("")
 	}
 
-	// Render a short moving "snake" segment along the perimeter path.
 	snakeLen := 14
 	if snakeLen > pathLen {
 		snakeLen = pathLen
@@ -129,7 +114,6 @@ func renderGradientLogo(width int, sweepIndex int) string {
 		snakeGrid[p.y][p.x] = true
 	}
 
-	// Merge the grids into a styled string.
 	for y := 0; y < gridH; y++ {
 		for x := 0; x < gridW; x++ {
 			if snakeGrid[y][x] {
@@ -148,7 +132,6 @@ func renderGradientLogo(width int, sweepIndex int) string {
 		}
 	}
 
-	// Center the entire logo block
 	logoBlock := result.String()
 	centered := lipgloss.NewStyle().Width(width).Align(lipgloss.Center).Render(logoBlock)
 	return centered
@@ -168,9 +151,6 @@ Feel free to reach out!
   LinkedIn    %s
 `
 
-// ============================================================================
-// Data Types
-// ============================================================================
 
 type Project struct {
 	Name string
@@ -228,10 +208,6 @@ var experiences = []Experience{
 	},
 }
 
-// ============================================================================
-// Page Types
-// ============================================================================
-
 type page int
 
 const (
@@ -244,10 +220,8 @@ const (
 
 var menuItems = []string{"About", "Projects", "Experience", "Contact"}
 
-// ============================================================================
-// Styles (Tokyo Night Theme)
-// ============================================================================
 
+// Theme
 var (
 	// Tokyo Night palette
 	tokyoFg      = lipgloss.Color("#C0CAF5") // primary text
@@ -267,7 +241,6 @@ var (
 	surimiOrange = tokyoGreen  // tech tags
 	carpYellow   = tokyoBlue   // project names
 
-	// Styles
 	titleStyle = lipgloss.NewStyle().
 			Foreground(oniViolet).
 			Bold(true).
@@ -313,10 +286,6 @@ var (
 			Italic(true)
 )
 
-// ============================================================================
-// Model
-// ============================================================================
-
 type model struct {
 	currentPage    page
 	menuCursor     int
@@ -339,15 +308,11 @@ func initialModel() model {
 	}
 }
 
-// ============================================================================
-// Bubble Tea Interface
-// ============================================================================
-
 func (m model) Init() tea.Cmd {
-	// Start the snake animation tick.
 	return tickCmd()
 }
 
+// Controls
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tickMsg:
@@ -454,31 +419,23 @@ func (m model) View() string {
 		content = m.renderContact()
 	}
 
-	// Render content without an outer border
 	boxWidth := min(m.width-4, 70)
 	boxedContent := lipgloss.NewStyle().
 		Padding(1, 2).
 		Width(boxWidth).
 		Render(content)
 
-	// Center in terminal
 	return lipgloss.Place(m.width, m.height,
 		lipgloss.Center, lipgloss.Center,
 		boxedContent)
 }
 
-// ============================================================================
-// Page Renderers
-// ============================================================================
-
 func (m model) renderMenu() string {
 	var b strings.Builder
 
-	// Logo with animation
 	b.WriteString(renderGradientLogo(60, m.logoSweepIndex))
 	b.WriteString("\n\n")
 
-	// Menu items
 	for i, item := range menuItems {
 		cursor := "  "
 		if m.menuCursor == i {
@@ -494,7 +451,6 @@ func (m model) renderMenu() string {
 		b.WriteString("\n")
 	}
 
-	// Help
 	b.WriteString(helpStyle.Render("\n↑/↓: navigate • enter: select • esc/backspace: menu • q: quit"))
 
 	return b.String()
@@ -524,7 +480,6 @@ func (m model) renderProjects() string {
 			cursor = "→ "
 		}
 
-		// Project name
 		name := cursor + p.Name
 		if m.projectCursor == i {
 			b.WriteString(projectNameStyle.Render(name))
@@ -533,7 +488,7 @@ func (m model) renderProjects() string {
 		}
 		b.WriteString("\n")
 
-		// Show details for selected project
+		// Expands project section
 		if m.projectCursor == i {
 			b.WriteString(subtleStyle.Render("    " + p.Desc))
 			b.WriteString("\n")
@@ -568,7 +523,6 @@ func (m model) renderExperience() string {
 			cursor = "→ "
 		}
 
-		// Role and company
 		line := fmt.Sprintf("%s%s @ %s",
 			cursor,
 			roleStyle.Render(exp.Role),
@@ -576,12 +530,10 @@ func (m model) renderExperience() string {
 		b.WriteString(line)
 		b.WriteString("\n")
 
-		// Period
 		b.WriteString("    ")
 		b.WriteString(periodStyle.Render(exp.Period))
 		b.WriteString("\n")
 
-		// Description (only for selected)
 		if m.expCursor == i {
 			b.WriteString("    ")
 			b.WriteString(contentStyle.Render(exp.Desc))
@@ -620,19 +572,16 @@ func (m model) renderContact() string {
 	return b.String()
 }
 
-// ============================================================================
-// Main
-// ============================================================================
 
 func main() {
-	// Force 256-color output for terminals that support it, even under systemd.
+	// This supposedly fixes the color issue
 	lipgloss.SetColorProfile(termenv.ANSI256)
 
 	publicKeyAuth := func(ctx ssh.Context, key ssh.PublicKey) bool {
 		return true
 	}
+	// This lets people see the portfolio even without a public key
 	passwordAuth := func(ctx ssh.Context, password string) bool {
-		// Allow password auth as a fallback for clients without keys.
 		return true
 	}
 

@@ -11,7 +11,7 @@ run:
 	go run .
 
 build-linux: | $(BIN_DIR)
-	GOOS=linux GOARCH=amd64 go build -o $(BIN_DIR)/$(APP_NAME)-linux .
+	GOOS=linux GOARCH=amd64 go build -o $(BIN_DIR)/$(APP_NAME)-linux2 .
 
 keys:
 	mkdir -p .ssh
