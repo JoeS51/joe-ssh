@@ -211,7 +211,8 @@ var experiences = []Experience{
 type page int
 
 const (
-	menuPage page = iota
+	splashPage page = iota
+	menuPage
 	aboutPage
 	projectsPage
 	experiencePage
@@ -219,6 +220,8 @@ const (
 )
 
 var menuItems = []string{"About", "Projects", "Experience", "Contact"}
+
+var matrixChars = []rune("01ABCDEFGHIJKLMNOPQRSTUVWXYZ<>+-*/[]{}()#$%&@")
 
 
 // Theme
@@ -294,17 +297,19 @@ type model struct {
 	width          int
 	height         int
 	logoSweepIndex int
+	matrixFrame    int
 }
 
 func initialModel() model {
 	return model{
-		currentPage:    menuPage,
+		currentPage:    splashPage,
 		menuCursor:     0,
 		projectCursor:  0,
 		expCursor:      0,
 		width:          80,
 		height:         24,
 		logoSweepIndex: 0,
+		matrixFrame:    0,
 	}
 }
 
@@ -316,11 +321,13 @@ func (m model) Init() tea.Cmd {
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tickMsg:
-		if m.currentPage == menuPage {
+		switch m.currentPage {
+		case splashPage:
+			m.matrixFrame++
+			return m, tickCmd()
+		case menuPage:
 			m.logoSweepIndex++
-			return m, tea.Tick(50*time.Millisecond, func(t time.Time) tea.Msg {
-				return tickMsg(t)
-			})
+			return m, tickCmd()
 		}
 		return m, nil
 
@@ -332,13 +339,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "q":
-			if m.currentPage == menuPage {
+			if m.currentPage == splashPage || m.currentPage == menuPage {
 				return m, tea.Quit
 			}
 			m.currentPage = menuPage
 			return m, tickCmd()
 
 		case "esc", "backspace":
+			if m.currentPage == splashPage {
+				return m, tea.Quit
+			}
 			if m.currentPage != menuPage {
 				m.currentPage = menuPage
 			}
@@ -378,7 +388,26 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 
-		case "enter", " ":
+		case "enter":
+			if m.currentPage == splashPage {
+				m.currentPage = menuPage
+				return m, tickCmd()
+			}
+			if m.currentPage == menuPage {
+				switch m.menuCursor {
+				case 0:
+					m.currentPage = aboutPage
+				case 1:
+					m.currentPage = projectsPage
+				case 2:
+					m.currentPage = experiencePage
+				case 3:
+					m.currentPage = contactPage
+				}
+			}
+			return m, nil
+
+		case " ":
 			if m.currentPage == menuPage {
 				switch m.menuCursor {
 				case 0:
@@ -404,6 +433,10 @@ func tickCmd() tea.Cmd {
 }
 
 func (m model) View() string {
+	if m.currentPage == splashPage {
+		return m.renderSplash()
+	}
+
 	var content string
 
 	switch m.currentPage {
@@ -428,6 +461,89 @@ func (m model) View() string {
 	return lipgloss.Place(m.width, m.height,
 		lipgloss.Center, lipgloss.Center,
 		boxedContent)
+}
+
+func (m model) renderSplash() string {
+	w := max(m.width, 20)
+	h := max(m.height, 8)
+
+	promptVisible := (m.matrixFrame/6)%2 == 0
+	prompt := "Press Enter to continue"
+	help := "q / esc to quit"
+
+	promptY := h / 2
+	helpY := promptY + 1
+	promptX := max(0, (w-len(prompt))/2)
+	helpX := max(0, (w-len(help))/2)
+
+	promptStyle := lipgloss.NewStyle().
+		Foreground(tokyoGreen).
+		Bold(true).
+		Background(lipgloss.Color("#001100"))
+	helpStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#1f7a1f")).
+		Background(lipgloss.Color("#001100"))
+
+	var b strings.Builder
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			if y == promptY && x >= promptX && x < promptX+len(prompt) {
+				if promptVisible {
+					ch := string(prompt[x-promptX])
+					b.WriteString(promptStyle.Render(ch))
+				} else {
+					b.WriteString(promptStyle.Render(" "))
+				}
+				continue
+			}
+			if y == helpY && x >= helpX && x < helpX+len(help) {
+				ch := string(help[x-helpX])
+				b.WriteString(helpStyle.Render(ch))
+				continue
+			}
+			b.WriteString(m.matrixCell(x, y, w, h))
+		}
+		if y < h-1 {
+			b.WriteByte('\n')
+		}
+	}
+
+	return b.String()
+}
+
+func (m model) matrixCell(x, y, w, h int) string {
+	if h <= 0 || w <= 0 {
+		return " "
+	}
+
+	colSeed := x*73 + 19
+	speed := 1 + (colSeed % 4)
+	offset := (colSeed*17 + x*11) % (h * 3)
+	trailLen := 6 + (colSeed % max(8, h/2))
+	head := (m.matrixFrame*speed + offset) % (h * 3)
+
+	if y > head || head-y >= trailLen {
+		// Sparse background glyphs keep the screen from looking empty.
+		if (x+y+m.matrixFrame)%41 == 0 {
+			ch := string(matrixChars[(x*13+y*7+m.matrixFrame)%len(matrixChars)])
+			return lipgloss.NewStyle().Foreground(lipgloss.Color("#062f06")).Render(ch)
+		}
+		return " "
+	}
+
+	dist := head - y
+	ch := string(matrixChars[(x*17+y*29+m.matrixFrame*3)%len(matrixChars)])
+
+	switch {
+	case dist == 0:
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("#d6ffd6")).Bold(true).Render(ch)
+	case dist < 3:
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("#4dff4d")).Render(ch)
+	case dist < 7:
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("#18c918")).Render(ch)
+	default:
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("#0a5f0a")).Render(ch)
+	}
 }
 
 func (m model) renderMenu() string {
