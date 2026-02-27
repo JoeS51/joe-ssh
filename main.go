@@ -20,6 +20,8 @@ func clickableLink(label, url string) string {
 	return "\x1b]8;;" + url + "\x1b\\" + label + "\x1b]8;;\x1b\\"
 }
 
+var welcomeScreen = []string{"JOE SLUIS"}
+
 var asciiLogoLines = []string{
 	`             __       __           __      `,
 	`            /\ \     /\ \         /\ \    `,
@@ -211,7 +213,8 @@ var experiences = []Experience{
 type page int
 
 const (
-	menuPage page = iota
+	splashPage page = iota
+	menuPage
 	aboutPage
 	projectsPage
 	experiencePage
@@ -219,6 +222,8 @@ const (
 )
 
 var menuItems = []string{"About", "Projects", "Experience", "Contact"}
+
+var matrixChars = []rune("01ABCDEFGHIJKLMNOPQRSTUVWXYZ<>+-*/[]{}()#$%&@")
 
 
 // Theme
@@ -294,17 +299,31 @@ type model struct {
 	width          int
 	height         int
 	logoSweepIndex int
+	matrixFrame    int
+	matrixSeed     uint64
+	matrixColumns  []matrixColumn
+}
+
+type matrixColumn struct {
+	active     bool
+	head       int
+	speed      int
+	trail      int
+	cooldown   int
+	glyphShift int
 }
 
 func initialModel() model {
 	return model{
-		currentPage:    menuPage,
+		currentPage:    splashPage,
 		menuCursor:     0,
 		projectCursor:  0,
 		expCursor:      0,
 		width:          80,
 		height:         24,
 		logoSweepIndex: 0,
+		matrixFrame:    0,
+		matrixSeed:     uint64(time.Now().UnixNano()),
 	}
 }
 
@@ -316,29 +335,36 @@ func (m model) Init() tea.Cmd {
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tickMsg:
-		if m.currentPage == menuPage {
+		switch m.currentPage {
+		case splashPage:
+			m.matrixFrame++
+			m.advanceMatrix()
+			return m, tickCmd()
+		case menuPage:
 			m.logoSweepIndex++
-			return m, tea.Tick(50*time.Millisecond, func(t time.Time) tea.Msg {
-				return tickMsg(t)
-			})
+			return m, tickCmd()
 		}
 		return m, nil
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		m.ensureMatrixColumns()
 		return m, nil
 
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "q":
-			if m.currentPage == menuPage {
+			if m.currentPage == splashPage || m.currentPage == menuPage {
 				return m, tea.Quit
 			}
 			m.currentPage = menuPage
 			return m, tickCmd()
 
 		case "esc", "backspace":
+			if m.currentPage == splashPage {
+				return m, tea.Quit
+			}
 			if m.currentPage != menuPage {
 				m.currentPage = menuPage
 			}
@@ -378,7 +404,26 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 
-		case "enter", " ":
+		case "enter":
+			if m.currentPage == splashPage {
+				m.currentPage = menuPage
+				return m, tickCmd()
+			}
+			if m.currentPage == menuPage {
+				switch m.menuCursor {
+				case 0:
+					m.currentPage = aboutPage
+				case 1:
+					m.currentPage = projectsPage
+				case 2:
+					m.currentPage = experiencePage
+				case 3:
+					m.currentPage = contactPage
+				}
+			}
+			return m, nil
+
+		case " ":
 			if m.currentPage == menuPage {
 				switch m.menuCursor {
 				case 0:
@@ -404,6 +449,10 @@ func tickCmd() tea.Cmd {
 }
 
 func (m model) View() string {
+	if m.currentPage == splashPage {
+		return m.renderSplash()
+	}
+
 	var content string
 
 	switch m.currentPage {
@@ -428,6 +477,234 @@ func (m model) View() string {
 	return lipgloss.Place(m.width, m.height,
 		lipgloss.Center, lipgloss.Center,
 		boxedContent)
+}
+
+func (m model) renderSplash() string {
+	w := max(m.width, 20)
+	h := max(m.height, 8)
+	m.ensureMatrixColumns()
+
+	titleText := "J O E   S L U I S"
+	prompt := "Press Enter to continue"
+	help := "q / esc to quit"
+
+	titleBoxW := len(titleText) + 4
+	titleBoxH := 3
+	titleX := max(0, (w-titleBoxW)/2)
+	titleTop := max(0, h/2-1)
+	titleTextX := titleX + 2
+	titleTextY := titleTop + 1
+
+	promptY := titleTop + titleBoxH + 1
+	if promptY > h-3 {
+		promptY = h - 3
+	}
+	helpY := promptY + 2
+	promptX := max(0, (w-len(prompt))/2)
+	helpX := max(0, (w-len(help))/2)
+
+	titleTextStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#FFFFFF")).
+		Bold(true)
+	titleBorderStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#A9B1D6")).
+		Background(lipgloss.Color("#000000"))
+	titleBgStyle := lipgloss.NewStyle().
+		Background(lipgloss.Color("#000000"))
+	promptStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#E5E7EB")).
+		Bold(true).
+		Background(lipgloss.Color("#111827"))
+	promptPadStyle := lipgloss.NewStyle().
+		Background(lipgloss.Color("#111827"))
+	helpStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#C7D2FE")).
+		Bold(true).
+		Background(lipgloss.Color("#111827"))
+
+	var b strings.Builder
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			insideTitleBox := y >= titleTop && y < titleTop+titleBoxH &&
+				x >= titleX && x < titleX+titleBoxW
+			if insideTitleBox {
+				onBorder := y == titleTop || y == titleTop+titleBoxH-1 || x == titleX || x == titleX+titleBoxW-1
+				if onBorder {
+					borderRune := "-"
+					switch {
+					case (x == titleX || x == titleX+titleBoxW-1) && (y == titleTop || y == titleTop+titleBoxH-1):
+						borderRune = "+"
+					case x == titleX || x == titleX+titleBoxW-1:
+						borderRune = "|"
+					}
+					b.WriteString(titleBorderStyle.Render(borderRune))
+				} else if y == titleTextY && x >= titleTextX && x < titleTextX+len(titleText) {
+					ch := string(titleText[x-titleTextX])
+					if ch == " " {
+						b.WriteString(titleBgStyle.Render(" "))
+					} else {
+						b.WriteString(titleTextStyle.Render(ch))
+					}
+				} else {
+					b.WriteString(titleBgStyle.Render(" "))
+				}
+				continue
+			}
+			insidePromptBox := (y == promptY || y == promptY+1) &&
+				x >= promptX && x < promptX+len(prompt)
+			if insidePromptBox {
+				if y == promptY {
+					ch := string(prompt[x-promptX])
+					b.WriteString(promptStyle.Render(ch))
+				} else {
+					b.WriteString(promptPadStyle.Render(" "))
+				}
+				continue
+			}
+			if y == helpY && x >= helpX && x < helpX+len(help) {
+				ch := string(help[x-helpX])
+				b.WriteString(helpStyle.Render(ch))
+				continue
+			}
+			b.WriteString(m.matrixCell(x, y, w, h))
+		}
+		if y < h-1 {
+			b.WriteByte('\n')
+		}
+	}
+
+	return b.String()
+}
+
+func (m model) matrixCell(x, y, w, h int) string {
+	if h <= 0 || w <= 0 {
+		return " "
+	}
+
+	if x < 0 || x >= len(m.matrixColumns) {
+		return " "
+	}
+	col := m.matrixColumns[x]
+
+	if !col.active || y > col.head || col.head-y >= col.trail {
+		// Hash-based sparse glyphs avoid visible diagonal banding patterns.
+		noise := matrixHash(x, y, m.matrixFrame/20, int(m.matrixSeed&0xffff))
+		if noise%1000 < 4 {
+			ch := string(matrixChars[noise%len(matrixChars)])
+			switch noise % 3 {
+			case 0:
+				return lipgloss.NewStyle().Foreground(tokyoMuted).Render(ch)
+			case 1:
+				return lipgloss.NewStyle().Foreground(tokyoFgAlt).Render(ch)
+			default:
+				return lipgloss.NewStyle().Foreground(tokyoMuted).Render(ch)
+			}
+		}
+		return " "
+	}
+
+	dist := col.head - y
+	noise := matrixHash(x, y, m.matrixFrame/3, col.glyphShift)
+	ch := string(matrixChars[noise%len(matrixChars)])
+
+	switch {
+	case dist == 0:
+		return lipgloss.NewStyle().Foreground(tokyoCyan).Bold(true).Render(ch)
+	case dist < 3:
+		return lipgloss.NewStyle().Foreground(tokyoBlue).Render(ch)
+	case dist < 7:
+		return lipgloss.NewStyle().Foreground(tokyoFgAlt).Render(ch)
+	default:
+		return lipgloss.NewStyle().Foreground(tokyoMuted).Render(ch)
+	}
+}
+
+func matrixHash(x, y, frame, salt int) int {
+	v := uint32(x*73856093) ^ uint32(y*19349663) ^ uint32(frame*83492791) ^ uint32(salt*2654435761)
+	v ^= v >> 13
+	v *= 1274126177
+	v ^= v >> 16
+	return int(v & 0x7fffffff)
+}
+
+func (m *model) ensureMatrixColumns() {
+	w := max(m.width, 20)
+	if w <= 0 {
+		m.matrixColumns = nil
+		return
+	}
+	if len(m.matrixColumns) == w {
+		return
+	}
+
+	prev := m.matrixColumns
+	next := make([]matrixColumn, w)
+	copy(next, prev)
+	for i := len(prev); i < w; i++ {
+		next[i] = m.newMatrixColumn()
+	}
+	m.matrixColumns = next
+}
+
+func (m *model) advanceMatrix() {
+	m.ensureMatrixColumns()
+	h := max(m.height, 8)
+
+	for i := range m.matrixColumns {
+		col := m.matrixColumns[i]
+		if col.active {
+			col.head += col.speed
+			// Stream fully left the viewport.
+			if col.head-col.trail > h {
+				col.active = false
+				col.cooldown = 1 + m.randN(max(8, h/3))
+			}
+			m.matrixColumns[i] = col
+			continue
+		}
+
+		if col.cooldown > 0 {
+			col.cooldown--
+			m.matrixColumns[i] = col
+			continue
+		}
+
+		// Randomized starts with lower frequency for a calmer rain effect.
+		if m.randN(100) < 12 {
+			col.active = true
+			col.head = -m.randN(max(3, h/2))
+			col.speed = 1 + m.randN(2)
+			col.trail = 8 + m.randN(max(8, h/2))
+			col.glyphShift = m.randN(len(matrixChars))
+		} else {
+			col.cooldown = 2 + m.randN(10)
+		}
+		m.matrixColumns[i] = col
+	}
+}
+
+func (m *model) newMatrixColumn() matrixColumn {
+	h := max(m.height, 8)
+	col := matrixColumn{
+		active:     m.randN(100) < 35,
+		head:       -m.randN(max(3, h/2)),
+		speed:      1 + m.randN(2),
+		trail:      8 + m.randN(max(8, h/2)),
+		cooldown:   2 + m.randN(max(10, h/2)),
+		glyphShift: m.randN(len(matrixChars)),
+	}
+	if !col.active {
+		col.head = -1
+	}
+	return col
+}
+
+func (m *model) randN(n int) int {
+	if n <= 0 {
+		return 0
+	}
+	m.matrixSeed = m.matrixSeed*1664525 + 1013904223
+	return int((m.matrixSeed >> 16) % uint64(n))
 }
 
 func (m model) renderMenu() string {
