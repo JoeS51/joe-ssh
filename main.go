@@ -23,7 +23,7 @@ func clickableLink(label, url string) string {
 var welcomeScreen = []string{"JOE SLUIS"}
 
 var asciiLogoLines = []string{
-	`             __       __           __      `,
+	`              __       __           __      `,
 	`            /\ \     /\ \         /\ \    `,
 	`            \ \ \   /  \ \       /  \ \   `,
 	`            /\ \_\ / /\ \ \     / /\ \ \  `,
@@ -39,8 +39,8 @@ var asciiLogoLines = []string{
 func renderGradientLogo(width int, sweepIndex int) string {
 	var result strings.Builder
 
-	baseStyle := lipgloss.NewStyle().Foreground(oniViolet).Bold(true)
-	snakeStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#9EC5FF")).Bold(true)
+	baseStyle := lipgloss.NewStyle().Foreground(tokyoCyan).Bold(true)
+	_ = sweepIndex
 
 	linesToShow := len(asciiLogoLines)
 
@@ -55,81 +55,15 @@ func renderGradientLogo(width int, sweepIndex int) string {
 		return lipgloss.NewStyle().Width(width).Align(lipgloss.Center).Render("")
 	}
 
-	pad := 1
-	gridW := maxLineLen + pad*2
-	gridH := linesToShow + pad*2
-
-	baseGrid := make([][]rune, gridH)
-	for y := 0; y < gridH; y++ {
-		row := make([]rune, gridW)
-		for x := 0; x < gridW; x++ {
-			row[x] = ' '
-		}
-		baseGrid[y] = row
-	}
-
-	for i := 0; i < linesToShow; i++ {
-		lineRunes := []rune(asciiLogoLines[i])
-		for j, r := range lineRunes {
-			baseGrid[pad+i][pad+j] = r
-		}
-	}
-
-	type pt struct{ x, y int }
-	path := make([]pt, 0, gridW*2+gridH*2)
-
-	for x := 0; x < gridW; x++ {
-		path = append(path, pt{x: x, y: 0})
-	}
-	for y := 1; y < gridH-1; y++ {
-		path = append(path, pt{x: gridW - 1, y: y})
-	}
-	if gridH > 1 {
-		for x := gridW - 1; x >= 0; x-- {
-			path = append(path, pt{x: x, y: gridH - 1})
-		}
-	}
-	if gridW > 1 {
-		for y := gridH - 2; y >= 1; y-- {
-			path = append(path, pt{x: 0, y: y})
-		}
-	}
-
-	pathLen := len(path)
-	if pathLen == 0 {
-		return lipgloss.NewStyle().Width(width).Align(lipgloss.Center).Render("")
-	}
-
-	snakeLen := 14
-	if snakeLen > pathLen {
-		snakeLen = pathLen
-	}
-	start := sweepIndex % pathLen
-
-	snakeGrid := make([][]bool, gridH)
-	for y := 0; y < gridH; y++ {
-		snakeGrid[y] = make([]bool, gridW)
-	}
-	for i := 0; i < snakeLen; i++ {
-		idx := (start + i) % pathLen
-		p := path[idx]
-		snakeGrid[p.y][p.x] = true
-	}
-
-	for y := 0; y < gridH; y++ {
-		for x := 0; x < gridW; x++ {
-			if snakeGrid[y][x] {
-				result.WriteString(snakeStyle.Render("•"))
-				continue
-			}
-			ch := string(baseGrid[y][x])
-			if baseGrid[y][x] == ' ' {
-				result.WriteString(ch)
+	for y := 0; y < linesToShow; y++ {
+		for _, r := range asciiLogoLines[y] {
+			if r == ' ' {
+				result.WriteRune(r)
 			} else {
-				result.WriteString(baseStyle.Render(ch))
+				result.WriteString(baseStyle.Render(string(r)))
 			}
 		}
-		if y < gridH-1 {
+		if y < linesToShow-1 {
 			result.WriteString("\n")
 		}
 	}
@@ -223,19 +157,19 @@ const (
 
 var menuItems = []string{"About", "Projects", "Experience", "Contact"}
 
-var matrixChars = []rune("01ABCDEFGHIJKLMNOPQRSTUVWXYZ<>+-*/[]{}()#$%&@")
+var matrixChars = []rune("ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜｦﾝｧｨｩｪｫｬｭｮｯｰ<>[]{}()+-*/=$%@#")
 
 
 // Theme
 var (
-	// Tokyo Night palette
-	tokyoFg      = lipgloss.Color("#C0CAF5") // primary text
-	tokyoFgAlt   = lipgloss.Color("#A9B1D6") // secondary text
-	tokyoMuted   = lipgloss.Color("#565F89") // muted/help text
-	tokyoBlue    = lipgloss.Color("#7AA2F7") // title/border
-	tokyoCyan    = lipgloss.Color("#7DCFFF") // links
-	tokyoPurple  = lipgloss.Color("#BB9AF7") // selected highlight
-	tokyoGreen   = lipgloss.Color("#9ECE6A") // tech tags
+	// Nord palette
+	tokyoFg      = lipgloss.Color("#D8DEE9") // primary text
+	tokyoFgAlt   = lipgloss.Color("#E5E9F0") // secondary text
+	tokyoMuted   = lipgloss.Color("#4C566A") // muted/help text
+	tokyoBlue    = lipgloss.Color("#81A1C1") // title/border
+	tokyoCyan    = lipgloss.Color("#88C0D0") // links
+	tokyoPurple  = lipgloss.Color("#81A1C1") // selected highlight
+	tokyoGreen   = lipgloss.Color("#8FBCBB") // tech tags
 
 	// Aliases for compatibility
 	oniViolet    = tokyoBlue   // titles/borders
@@ -252,10 +186,10 @@ var (
 			MarginBottom(1)
 
 	menuStyle = lipgloss.NewStyle().
-			Foreground(fujiWhite)
+			Foreground(tokyoFgAlt)
 
 	selectedStyle = lipgloss.NewStyle().
-			Foreground(springGreen).
+			Foreground(tokyoFgAlt).
 			Bold(true)
 
 	helpStyle = lipgloss.NewStyle().
@@ -485,17 +419,15 @@ func (m model) renderSplash() string {
 	m.ensureMatrixColumns()
 
 	titleText := "J O E   S L U I S"
-	prompt := "Press Enter to continue"
+	prompt := "enter to continue"
 	help := "q / esc to quit"
 
-	titleBoxW := len(titleText) + 4
-	titleBoxH := 3
-	titleX := max(0, (w-titleBoxW)/2)
-	titleTop := max(0, h/2-1)
-	titleTextX := titleX + 2
-	titleTextY := titleTop + 1
+	titleTextW := len(titleText)
+	titleTextH := 1
+	titleTextX := max(0, (w-titleTextW)/2)
+	titleTextY := max(0, h/2)
 
-	promptY := titleTop + titleBoxH + 1
+	promptY := titleTextY + titleTextH + 1
 	if promptY > h-3 {
 		promptY = h - 3
 	}
@@ -503,50 +435,57 @@ func (m model) renderSplash() string {
 	promptX := max(0, (w-len(prompt))/2)
 	helpX := max(0, (w-len(help))/2)
 
+	// Center cutout keeps core text readable while matrix remains visible around it.
+	cutoutPadX := 6
+	cutoutPadY := 1
+	contentLeft := min(titleTextX, min(promptX, helpX))
+	contentRight := max(titleTextX+titleTextW-1, max(promptX+len(prompt)-1, helpX+len(help)-1))
+	contentTop := min(titleTextY, min(promptY, helpY))
+	contentBottom := max(titleTextY+titleTextH-1, max(promptY+1, helpY))
+	cutoutLeft := max(0, contentLeft-cutoutPadX)
+	cutoutRight := min(w-1, contentRight+cutoutPadX)
+	cutoutTop := max(0, contentTop-cutoutPadY)
+	cutoutBottom := min(h-1, contentBottom+cutoutPadY)
+
+	// Make the center rectangle ~50% larger while preserving center.
+	cutoutW := cutoutRight - cutoutLeft + 1
+	cutoutH := cutoutBottom - cutoutTop + 1
+	extraW := max(2, cutoutW*5/10)
+	extraH := max(1, cutoutH*5/10)
+	expandLeft := extraW / 2
+	expandRight := extraW - expandLeft
+	expandTop := extraH / 2
+	expandBottom := extraH - expandTop
+	cutoutLeft = max(0, cutoutLeft-expandLeft)
+	cutoutRight = min(w-1, cutoutRight+expandRight)
+	cutoutTop = max(0, cutoutTop-expandTop)
+	cutoutBottom = min(h-1, cutoutBottom+expandBottom)
 	titleTextStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#FFFFFF")).
+		Foreground(lipgloss.Color("#ECEFF4")).
 		Bold(true)
-	titleBorderStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#A9B1D6")).
-		Background(lipgloss.Color("#000000"))
-	titleBgStyle := lipgloss.NewStyle().
+	cutoutStyle := lipgloss.NewStyle().
 		Background(lipgloss.Color("#000000"))
 	promptStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#E5E7EB")).
 		Bold(true).
-		Background(lipgloss.Color("#111827"))
+		Background(lipgloss.Color("#000000"))
 	promptPadStyle := lipgloss.NewStyle().
-		Background(lipgloss.Color("#111827"))
+		Background(lipgloss.Color("#000000"))
 	helpStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#C7D2FE")).
 		Bold(true).
-		Background(lipgloss.Color("#111827"))
+		Background(lipgloss.Color("#000000"))
 
 	var b strings.Builder
 	for y := 0; y < h; y++ {
 		for x := 0; x < w; x++ {
-			insideTitleBox := y >= titleTop && y < titleTop+titleBoxH &&
-				x >= titleX && x < titleX+titleBoxW
-			if insideTitleBox {
-				onBorder := y == titleTop || y == titleTop+titleBoxH-1 || x == titleX || x == titleX+titleBoxW-1
-				if onBorder {
-					borderRune := "-"
-					switch {
-					case (x == titleX || x == titleX+titleBoxW-1) && (y == titleTop || y == titleTop+titleBoxH-1):
-						borderRune = "+"
-					case x == titleX || x == titleX+titleBoxW-1:
-						borderRune = "|"
-					}
-					b.WriteString(titleBorderStyle.Render(borderRune))
-				} else if y == titleTextY && x >= titleTextX && x < titleTextX+len(titleText) {
-					ch := string(titleText[x-titleTextX])
-					if ch == " " {
-						b.WriteString(titleBgStyle.Render(" "))
-					} else {
-						b.WriteString(titleTextStyle.Render(ch))
-					}
+			insideTitleText := y == titleTextY && x >= titleTextX && x < titleTextX+len(titleText)
+			if insideTitleText {
+				ch := string(titleText[x-titleTextX])
+				if ch == " " {
+					b.WriteString(cutoutStyle.Render(" "))
 				} else {
-					b.WriteString(titleBgStyle.Render(" "))
+					b.WriteString(titleTextStyle.Render(ch))
 				}
 				continue
 			}
@@ -564,6 +503,10 @@ func (m model) renderSplash() string {
 			if y == helpY && x >= helpX && x < helpX+len(help) {
 				ch := string(help[x-helpX])
 				b.WriteString(helpStyle.Render(ch))
+				continue
+			}
+			if y >= cutoutTop && y <= cutoutBottom && x >= cutoutLeft && x <= cutoutRight {
+				b.WriteString(cutoutStyle.Render(" "))
 				continue
 			}
 			b.WriteString(m.matrixCell(x, y, w, h))

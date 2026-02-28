@@ -4,6 +4,8 @@ A terminal portfolio you can SSH into. Built with Go, Wish, and Bubble Tea.
 
 `ssh joesluis.dev`
 
+Demo video: [ssh-demo.mov](assets/ssh-demo.mov)
+
 ## Quick start (local)
 
 1. Generate a host key (one time):
