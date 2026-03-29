@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
 	"strings"
 	"time"
 
@@ -39,7 +40,8 @@ var asciiLogoLines = []string{
 func renderGradientLogo(width int, sweepIndex int) string {
 	var result strings.Builder
 
-	baseStyle := lipgloss.NewStyle().Foreground(tokyoCyan).Bold(true)
+	primaryStyle := lipgloss.NewStyle().Foreground(tokyoFgAlt).Bold(true)
+	accentStyle := lipgloss.NewStyle().Foreground(tokyoFg).Bold(true)
 	_ = sweepIndex
 
 	linesToShow := len(asciiLogoLines)
@@ -56,11 +58,15 @@ func renderGradientLogo(width int, sweepIndex int) string {
 	}
 
 	for y := 0; y < linesToShow; y++ {
+		lineStyle := primaryStyle
+		if y%3 == 1 {
+			lineStyle = accentStyle
+		}
 		for _, r := range asciiLogoLines[y] {
 			if r == ' ' {
 				result.WriteRune(r)
 			} else {
-				result.WriteString(baseStyle.Render(string(r)))
+				result.WriteString(lineStyle.Render(string(r)))
 			}
 		}
 		if y < linesToShow-1 {
@@ -288,10 +294,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case menuPage:
 			m.logoSweepIndex++
 			m.lifeTick++
-			if m.lifeTick%2 == 0 {
+			if m.lifeTick%4 == 0 {
 				m.stepLife()
 			}
-			if m.lifeTick%28 == 0 {
+			if m.lifeTick%44 == 0 {
 				m.seedLife(2)
 			}
 			return m, tickCmd()
@@ -1019,6 +1025,14 @@ func (m model) renderContact() string {
 func main() {
 	// This supposedly fixes the color issue
 	lipgloss.SetColorProfile(termenv.ANSI256)
+	listenAddr := os.Getenv("JOE_SSH_ADDR")
+	if listenAddr == "" {
+		listenAddr = "0.0.0.0:22"
+	}
+	hostKeyPath := os.Getenv("JOE_SSH_HOST_KEY")
+	if hostKeyPath == "" {
+		hostKeyPath = ".ssh/host_ed25519"
+	}
 
 	publicKeyAuth := func(ctx ssh.Context, key ssh.PublicKey) bool {
 		return true
@@ -1033,8 +1047,8 @@ func main() {
 	}
 
 	s, err := wish.NewServer(
-		wish.WithAddress("0.0.0.0:22"),
-		wish.WithHostKeyPath(".ssh/host_ed25519"),
+		wish.WithAddress(listenAddr),
+		wish.WithHostKeyPath(hostKeyPath),
 		wish.WithPublicKeyAuth(publicKeyAuth),
 		wish.WithPasswordAuth(passwordAuth),
 		wish.WithMiddleware(
