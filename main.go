@@ -74,9 +74,9 @@ func renderGradientLogo(width int, sweepIndex int) string {
 }
 
 var aboutContent = `
-Hey, I'm Joe, a software developer interested in building entertaining or useful things.
+Hey, I'm Joe, a software developer that builds entertaining things but occasionally locks in.
 
-Currently exploring React Internals and distributed systems.
+Currently into database internals and distributed systems.
 `
 
 var contactContent = `
@@ -86,7 +86,6 @@ Feel free to reach out!
   Email       %s
   LinkedIn    %s
 `
-
 
 type Project struct {
 	Name string
@@ -128,7 +127,7 @@ var experiences = []Experience{
 		Role:    "Software Engineer",
 		Company: "Microsoft",
 		Period:  "2025 - Present",
-		Desc:    "Azure SQL VM team",
+		Desc:    "Azure SQL VM team doing a lot of infra stuff",
 	},
 	{
 		Role:    "Software Engineer Intern",
@@ -140,7 +139,7 @@ var experiences = []Experience{
 		Role:    "Software Engineer Intern",
 		Company: "Blue Origin",
 		Period:  "Fall 2023",
-		Desc:    "New Glenn Rocket Software",
+		Desc:    "Worked on the New Glenn rocket",
 	},
 }
 
@@ -159,17 +158,16 @@ var menuItems = []string{"About", "Projects", "Experience", "Contact"}
 
 var matrixChars = []rune("ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜｦﾝｧｨｩｪｫｬｭｮｯｰ<>[]{}()+-*/=$%@#")
 
-
 // Theme
 var (
 	// Nord palette
-	tokyoFg      = lipgloss.Color("#D8DEE9") // primary text
-	tokyoFgAlt   = lipgloss.Color("#E5E9F0") // secondary text
-	tokyoMuted   = lipgloss.Color("#4C566A") // muted/help text
-	tokyoBlue    = lipgloss.Color("#81A1C1") // title/border
-	tokyoCyan    = lipgloss.Color("#88C0D0") // links
-	tokyoPurple  = lipgloss.Color("#81A1C1") // selected highlight
-	tokyoGreen   = lipgloss.Color("#8FBCBB") // tech tags
+	tokyoFg     = lipgloss.Color("#D8DEE9") // primary text
+	tokyoFgAlt  = lipgloss.Color("#E5E9F0") // secondary text
+	tokyoMuted  = lipgloss.Color("#4C566A") // muted/help text
+	tokyoBlue   = lipgloss.Color("#81A1C1") // title/border
+	tokyoCyan   = lipgloss.Color("#88C0D0") // links
+	tokyoPurple = lipgloss.Color("#81A1C1") // selected highlight
+	tokyoGreen  = lipgloss.Color("#8FBCBB") // tech tags
 
 	// Aliases for compatibility
 	oniViolet    = tokyoBlue   // titles/borders
@@ -232,10 +230,18 @@ type model struct {
 	expCursor      int
 	width          int
 	height         int
+	mouseX         int
+	mouseY         int
+	mouseActive    bool
 	logoSweepIndex int
 	matrixFrame    int
 	matrixSeed     uint64
 	matrixColumns  []matrixColumn
+	lifeW          int
+	lifeH          int
+	lifeGrid       []bool
+	lifeNext       []bool
+	lifeTick       int
 }
 
 type matrixColumn struct {
@@ -248,17 +254,22 @@ type matrixColumn struct {
 }
 
 func initialModel() model {
-	return model{
+	m := model{
 		currentPage:    splashPage,
 		menuCursor:     0,
 		projectCursor:  0,
 		expCursor:      0,
 		width:          80,
 		height:         24,
+		mouseX:         -1,
+		mouseY:         -1,
+		mouseActive:    false,
 		logoSweepIndex: 0,
 		matrixFrame:    0,
 		matrixSeed:     uint64(time.Now().UnixNano()),
 	}
+	m.resetLife()
+	return m
 }
 
 func (m model) Init() tea.Cmd {
@@ -276,6 +287,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tickCmd()
 		case menuPage:
 			m.logoSweepIndex++
+			m.lifeTick++
+			if m.lifeTick%2 == 0 {
+				m.stepLife()
+			}
+			if m.lifeTick%28 == 0 {
+				m.seedLife(2)
+			}
 			return m, tickCmd()
 		}
 		return m, nil
@@ -283,7 +301,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		if m.mouseX < 0 || m.mouseX >= m.width || m.mouseY < 0 || m.mouseY >= m.height {
+			m.mouseActive = false
+		}
 		m.ensureMatrixColumns()
+		m.resetLife()
+		return m, nil
+
+	case tea.MouseMsg:
+		m.mouseX = msg.X
+		m.mouseY = msg.Y
+		m.mouseActive = m.mouseX >= 0 && m.mouseX < m.width && m.mouseY >= 0 && m.mouseY < m.height
 		return m, nil
 
 	case tea.KeyMsg:
@@ -391,7 +419,7 @@ func (m model) View() string {
 
 	switch m.currentPage {
 	case menuPage:
-		content = m.renderMenu()
+		return m.renderMenu()
 	case aboutPage:
 		content = m.renderAbout()
 	case projectsPage:
@@ -435,46 +463,31 @@ func (m model) renderSplash() string {
 	promptX := max(0, (w-len(prompt))/2)
 	helpX := max(0, (w-len(help))/2)
 
-	// Center cutout keeps core text readable while matrix remains visible around it.
-	cutoutPadX := 6
-	cutoutPadY := 1
+	// Soften matrix density around the hero copy to improve readability without a hard box.
+	focusPadX := 8
+	focusPadY := 2
 	contentLeft := min(titleTextX, min(promptX, helpX))
 	contentRight := max(titleTextX+titleTextW-1, max(promptX+len(prompt)-1, helpX+len(help)-1))
 	contentTop := min(titleTextY, min(promptY, helpY))
 	contentBottom := max(titleTextY+titleTextH-1, max(promptY+1, helpY))
-	cutoutLeft := max(0, contentLeft-cutoutPadX)
-	cutoutRight := min(w-1, contentRight+cutoutPadX)
-	cutoutTop := max(0, contentTop-cutoutPadY)
-	cutoutBottom := min(h-1, contentBottom+cutoutPadY)
-
-	// Make the center rectangle ~50% larger while preserving center.
-	cutoutW := cutoutRight - cutoutLeft + 1
-	cutoutH := cutoutBottom - cutoutTop + 1
-	extraW := max(2, cutoutW*5/10)
-	extraH := max(1, cutoutH*5/10)
-	expandLeft := extraW / 2
-	expandRight := extraW - expandLeft
-	expandTop := extraH / 2
-	expandBottom := extraH - expandTop
-	cutoutLeft = max(0, cutoutLeft-expandLeft)
-	cutoutRight = min(w-1, cutoutRight+expandRight)
-	cutoutTop = max(0, cutoutTop-expandTop)
-	cutoutBottom = min(h-1, cutoutBottom+expandBottom)
+	focusLeft := max(0, contentLeft-focusPadX)
+	focusRight := min(w-1, contentRight+focusPadX)
+	focusTop := max(0, contentTop-focusPadY)
+	focusBottom := min(h-1, contentBottom+focusPadY)
+	feather := 6
+	influenceLeft := max(0, focusLeft-feather)
+	influenceRight := min(w-1, focusRight+feather)
+	influenceTop := max(0, focusTop-feather)
+	influenceBottom := min(h-1, focusBottom+feather)
 	titleTextStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#ECEFF4")).
+		Foreground(lipgloss.Color("#F8FAFC")).
 		Bold(true)
-	cutoutStyle := lipgloss.NewStyle().
-		Background(lipgloss.Color("#000000"))
 	promptStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#E5E7EB")).
-		Bold(true).
-		Background(lipgloss.Color("#000000"))
-	promptPadStyle := lipgloss.NewStyle().
-		Background(lipgloss.Color("#000000"))
+		Foreground(lipgloss.Color("#F1F5F9")).
+		Bold(true)
 	helpStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#C7D2FE")).
-		Bold(true).
-		Background(lipgloss.Color("#000000"))
+		Foreground(lipgloss.Color("#BFD7EA")).
+		Bold(true)
 
 	var b strings.Builder
 	for y := 0; y < h; y++ {
@@ -483,7 +496,7 @@ func (m model) renderSplash() string {
 			if insideTitleText {
 				ch := string(titleText[x-titleTextX])
 				if ch == " " {
-					b.WriteString(cutoutStyle.Render(" "))
+					b.WriteByte(' ')
 				} else {
 					b.WriteString(titleTextStyle.Render(ch))
 				}
@@ -496,7 +509,7 @@ func (m model) renderSplash() string {
 					ch := string(prompt[x-promptX])
 					b.WriteString(promptStyle.Render(ch))
 				} else {
-					b.WriteString(promptPadStyle.Render(" "))
+					b.WriteByte(' ')
 				}
 				continue
 			}
@@ -505,10 +518,43 @@ func (m model) renderSplash() string {
 				b.WriteString(helpStyle.Render(ch))
 				continue
 			}
-			if y >= cutoutTop && y <= cutoutBottom && x >= cutoutLeft && x <= cutoutRight {
-				b.WriteString(cutoutStyle.Render(" "))
-				continue
+			if x >= influenceLeft && x <= influenceRight && y >= influenceTop && y <= influenceBottom {
+				dx := 0
+				if x < focusLeft {
+					dx = focusLeft - x
+				} else if x > focusRight {
+					dx = x - focusRight
+				}
+				dy := 0
+				if y < focusTop {
+					dy = focusTop - y
+				} else if y > focusBottom {
+					dy = y - focusBottom
+				}
+
+				dist := max(dx, dy)
+				suppressPct := 82 - dist*11
+				if suppressPct > 0 {
+					noise := matrixHash(x, y, m.matrixFrame/5, int(m.matrixSeed>>16)) % 100
+					if noise < suppressPct {
+						b.WriteByte(' ')
+						continue
+					}
+				}
 			}
+
+			if m.mouseActive {
+				dx := float64(x - m.mouseX)
+				dy := float64(y-m.mouseY) * 2.0
+				distSq := dx*dx + dy*dy
+
+				const mouseBlackRadius = 10.0
+				if distSq <= mouseBlackRadius*mouseBlackRadius {
+					b.WriteString(m.matrixCellBlack(x, y, w, h))
+					continue
+				}
+			}
+
 			b.WriteString(m.matrixCell(x, y, w, h))
 		}
 		if y < h-1 {
@@ -560,6 +606,30 @@ func (m model) matrixCell(x, y, w, h int) string {
 	default:
 		return lipgloss.NewStyle().Foreground(tokyoMuted).Render(ch)
 	}
+}
+
+func (m model) matrixCellBlack(x, y, w, h int) string {
+	if h <= 0 || w <= 0 {
+		return " "
+	}
+
+	if x < 0 || x >= len(m.matrixColumns) {
+		return " "
+	}
+	col := m.matrixColumns[x]
+
+	if !col.active || y > col.head || col.head-y >= col.trail {
+		noise := matrixHash(x, y, m.matrixFrame/20, int(m.matrixSeed&0xffff))
+		if noise%1000 < 4 {
+			ch := string(matrixChars[noise%len(matrixChars)])
+			return lipgloss.NewStyle().Foreground(lipgloss.Color("#000000")).Render(ch)
+		}
+		return " "
+	}
+
+	noise := matrixHash(x, y, m.matrixFrame/3, col.glyphShift)
+	ch := string(matrixChars[noise%len(matrixChars)])
+	return lipgloss.NewStyle().Foreground(lipgloss.Color("#000000")).Bold(true).Render(ch)
 }
 
 func matrixHash(x, y, frame, salt int) int {
@@ -650,11 +720,108 @@ func (m *model) randN(n int) int {
 	return int((m.matrixSeed >> 16) % uint64(n))
 }
 
-func (m model) renderMenu() string {
-	var b strings.Builder
+func (m *model) resetLife() {
+	w := max(m.width, 20)
+	h := max(m.height, 8)
+	m.lifeW = w
+	m.lifeH = h
+	size := w * h
+	m.lifeGrid = make([]bool, size)
+	m.lifeNext = make([]bool, size)
+	m.lifeTick = 0
+	m.seedLife(115)
+}
 
-	b.WriteString(renderGradientLogo(60, m.logoSweepIndex))
-	b.WriteString("\n\n")
+func (m *model) seedLife(chancePerThousand int) {
+	if m.lifeW <= 0 || m.lifeH <= 0 || len(m.lifeGrid) == 0 {
+		return
+	}
+	for i := range m.lifeGrid {
+		if m.randN(1000) < chancePerThousand {
+			m.lifeGrid[i] = true
+		}
+	}
+}
+
+func (m *model) stepLife() {
+	if m.lifeW <= 0 || m.lifeH <= 0 || len(m.lifeGrid) == 0 || len(m.lifeNext) != len(m.lifeGrid) {
+		m.resetLife()
+		if len(m.lifeGrid) == 0 {
+			return
+		}
+	}
+
+	w := m.lifeW
+	h := m.lifeH
+	population := 0
+
+	for y := 0; y < h; y++ {
+		up := (y - 1 + h) % h
+		down := (y + 1) % h
+		for x := 0; x < w; x++ {
+			left := (x - 1 + w) % w
+			right := (x + 1) % w
+			i := y*w + x
+			neighbors := 0
+			if m.lifeGrid[up*w+left] {
+				neighbors++
+			}
+			if m.lifeGrid[up*w+x] {
+				neighbors++
+			}
+			if m.lifeGrid[up*w+right] {
+				neighbors++
+			}
+			if m.lifeGrid[y*w+left] {
+				neighbors++
+			}
+			if m.lifeGrid[y*w+right] {
+				neighbors++
+			}
+			if m.lifeGrid[down*w+left] {
+				neighbors++
+			}
+			if m.lifeGrid[down*w+x] {
+				neighbors++
+			}
+			if m.lifeGrid[down*w+right] {
+				neighbors++
+			}
+
+			alive := m.lifeGrid[i]
+			nextAlive := neighbors == 3 || (alive && neighbors == 2)
+			m.lifeNext[i] = nextAlive
+			if nextAlive {
+				population++
+			}
+		}
+	}
+
+	m.lifeGrid, m.lifeNext = m.lifeNext, m.lifeGrid
+
+	total := w * h
+	if total == 0 {
+		return
+	}
+	if population < total/120 || population > total/3 {
+		m.seedLife(8)
+	}
+}
+
+func (m model) renderMenu() string {
+	w := max(m.width, 20)
+	h := max(m.height, 8)
+
+	contentWidth := min(60, max(18, w-8))
+	if contentWidth > w {
+		contentWidth = w
+	}
+
+	logoLines := strings.Split(renderGradientLogo(contentWidth, m.logoSweepIndex), "\n")
+	contentLines := make([]string, 0, len(logoLines)+len(menuItems)+4)
+	contentLines = append(contentLines, "")
+	contentLines = append(contentLines, logoLines...)
+	contentLines = append(contentLines, "")
 
 	for i, item := range menuItems {
 		cursor := "  "
@@ -664,16 +831,73 @@ func (m model) renderMenu() string {
 
 		line := cursor + item
 		if m.menuCursor == i {
-			b.WriteString(selectedStyle.Render(line))
+			line = selectedStyle.Render(line)
 		} else {
-			b.WriteString(menuStyle.Render(line))
+			line = menuStyle.Render(line)
 		}
-		b.WriteString("\n")
+		contentLines = append(contentLines, lipgloss.NewStyle().Width(contentWidth).Align(lipgloss.Center).Render(line))
 	}
 
-	b.WriteString(helpStyle.Render("\n↑/↓: navigate • enter: select • esc/backspace: menu • q: quit"))
+	contentLines = append(contentLines, "")
+	menuHelpLineStyle := lipgloss.NewStyle().Foreground(fujiGray)
+	helpLine := menuHelpLineStyle.Render("↑/↓ navigate • enter select • esc/backspace menu • q quit")
+	contentLines = append(contentLines, lipgloss.NewStyle().Width(contentWidth).Align(lipgloss.Center).Render(helpLine))
 
-	return b.String()
+	for i := range contentLines {
+		contentLines[i] = lipgloss.NewStyle().Width(contentWidth).Render(contentLines[i])
+	}
+
+	contentHeight := len(contentLines)
+	contentX := max(0, (w-contentWidth)/2)
+	contentY := max(0, (h-contentHeight)/2)
+	contentRight := min(w, contentX+contentWidth)
+	contentBottom := min(h, contentY+contentHeight)
+
+	var out strings.Builder
+	for y := 0; y < h; y++ {
+		insideContentRow := y >= contentY && y < contentBottom
+		if !insideContentRow {
+			for x := 0; x < w; x++ {
+				out.WriteString(m.menuLifeCell(x, y))
+			}
+		} else {
+			for x := 0; x < contentX; x++ {
+				out.WriteString(m.menuLifeCell(x, y))
+			}
+			line := contentLines[y-contentY]
+			out.WriteString(line)
+			for x := contentRight; x < w; x++ {
+				out.WriteString(m.menuLifeCell(x, y))
+			}
+		}
+
+		if y < h-1 {
+			out.WriteByte('\n')
+		}
+	}
+
+	return out.String()
+}
+
+func (m model) menuLifeCell(x, y int) string {
+	if x < 0 || y < 0 || x >= m.lifeW || y >= m.lifeH {
+		return " "
+	}
+	i := y*m.lifeW + x
+	if i < 0 || i >= len(m.lifeGrid) || !m.lifeGrid[i] {
+		return " "
+	}
+
+	noise := matrixHash(x, y, m.logoSweepIndex/3, int(m.matrixSeed>>12)) % 10
+	ch := "."
+	if noise < 2 {
+		ch = "*"
+	}
+
+	if noise < 7 {
+		return lipgloss.NewStyle().Foreground(tokyoMuted).Render(ch)
+	}
+	return lipgloss.NewStyle().Foreground(tokyoBlue).Render(ch)
 }
 
 func (m model) renderAbout() string {
@@ -792,7 +1016,6 @@ func (m model) renderContact() string {
 	return b.String()
 }
 
-
 func main() {
 	// This supposedly fixes the color issue
 	lipgloss.SetColorProfile(termenv.ANSI256)
@@ -806,7 +1029,7 @@ func main() {
 	}
 
 	teaHandler := func(s ssh.Session) (tea.Model, []tea.ProgramOption) {
-		return initialModel(), []tea.ProgramOption{tea.WithAltScreen()}
+		return initialModel(), []tea.ProgramOption{tea.WithAltScreen(), tea.WithMouseAllMotion()}
 	}
 
 	s, err := wish.NewServer(
