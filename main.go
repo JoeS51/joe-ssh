@@ -158,9 +158,12 @@ const (
 	projectsPage
 	experiencePage
 	contactPage
+	blogPage
+	blogPostPage
 )
 
-var menuItems = []string{"About", "Projects", "Experience", "Contact"}
+var menuItems = []string{"About", "Projects", "Experience", "Blog", "Contact"}
+var menuPages = []page{aboutPage, projectsPage, experiencePage, blogPage, contactPage}
 
 var matrixChars = []rune("ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜｦﾝｧｨｩｪｫｬｭｮｯｰ<>[]{}()+-*/=$%@#")
 
@@ -234,6 +237,8 @@ type model struct {
 	menuCursor     int
 	projectCursor  int
 	expCursor      int
+	blogCursor     int
+	reader         blogReader
 	width          int
 	height         int
 	mouseX         int
@@ -312,15 +317,39 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.ensureMatrixColumns()
 		m.resetLife()
+		if m.reader.lines != nil {
+			_, textW, viewH := m.blogLayout()
+			m.reader.rewrap(textW)
+			m.reader.scrollToCursor(viewH)
+		}
 		return m, nil
 
 	case tea.MouseMsg:
 		m.mouseX = msg.X
 		m.mouseY = msg.Y
 		m.mouseActive = m.mouseX >= 0 && m.mouseX < m.width && m.mouseY >= 0 && m.mouseY < m.height
+		if m.currentPage == blogPostPage {
+			m = m.handleBlogMouse(msg)
+		}
 		return m, nil
 
 	case tea.KeyMsg:
+		// SSH can deliver several quickly typed keys as one message, so handle them one at a time.
+		if msg.Type == tea.KeyRunes && len(msg.Runes) > 1 {
+			var next tea.Model = m
+			var cmds []tea.Cmd
+			for _, r := range msg.Runes {
+				var cmd tea.Cmd
+				next, cmd = next.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+				cmds = append(cmds, cmd)
+			}
+			return next, tea.Batch(cmds...)
+		}
+
+		// The blog reader has its own vim-style keymap.
+		if m.currentPage == blogPostPage {
+			return m.updateBlogPost(msg)
+		}
 		switch msg.String() {
 		case "ctrl+c", "q":
 			if m.currentPage == splashPage || m.currentPage == menuPage {
@@ -352,6 +381,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.expCursor > 0 {
 					m.expCursor--
 				}
+			case blogPage:
+				if m.blogCursor > 0 {
+					m.blogCursor--
+				}
 			}
 			return m, nil
 
@@ -369,40 +402,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.expCursor < len(experiences)-1 {
 					m.expCursor++
 				}
+			case blogPage:
+				if m.blogCursor < len(blogPosts)-1 {
+					m.blogCursor++
+				}
 			}
 			return m, nil
 
-		case "enter":
-			if m.currentPage == splashPage {
+		case "enter", " ":
+			if m.currentPage == splashPage && msg.String() == "enter" {
 				m.currentPage = menuPage
 				return m, tickCmd()
 			}
-			if m.currentPage == menuPage {
-				switch m.menuCursor {
-				case 0:
-					m.currentPage = aboutPage
-				case 1:
-					m.currentPage = projectsPage
-				case 2:
-					m.currentPage = experiencePage
-				case 3:
-					m.currentPage = contactPage
-				}
-			}
-			return m, nil
-
-		case " ":
-			if m.currentPage == menuPage {
-				switch m.menuCursor {
-				case 0:
-					m.currentPage = aboutPage
-				case 1:
-					m.currentPage = projectsPage
-				case 2:
-					m.currentPage = experiencePage
-				case 3:
-					m.currentPage = contactPage
-				}
+			switch m.currentPage {
+			case menuPage:
+				m.currentPage = menuPages[m.menuCursor]
+			case blogPage:
+				m.openBlogPost(m.blogCursor)
 			}
 			return m, nil
 		}
@@ -434,6 +450,10 @@ func (m model) View() string {
 		content = m.renderExperience()
 	case contactPage:
 		content = m.renderContact()
+	case blogPage:
+		content = m.renderBlog()
+	case blogPostPage:
+		return m.renderBlogPost()
 	}
 
 	boxWidth := min(m.width-4, 70)
@@ -1034,23 +1054,15 @@ func main() {
 		hostKeyPath = ".ssh/host_ed25519"
 	}
 
-	publicKeyAuth := func(ctx ssh.Context, key ssh.PublicKey) bool {
-		return true
-	}
-	// This lets people see the portfolio even without a public key
-	passwordAuth := func(ctx ssh.Context, password string) bool {
-		return true
-	}
-
 	teaHandler := func(s ssh.Session) (tea.Model, []tea.ProgramOption) {
 		return initialModel(), []tea.ProgramOption{tea.WithAltScreen(), tea.WithMouseAllMotion()}
 	}
 
+	// No auth handlers means the server accepts SSH's "none" auth, so visitors
+	// connect straight away without key passphrase or password prompts.
 	s, err := wish.NewServer(
 		wish.WithAddress(listenAddr),
 		wish.WithHostKeyPath(hostKeyPath),
-		wish.WithPublicKeyAuth(publicKeyAuth),
-		wish.WithPasswordAuth(passwordAuth),
 		wish.WithMiddleware(
 			bubbletea.Middleware(teaHandler),
 		),
